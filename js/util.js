@@ -2,7 +2,7 @@
    آبرو — ابزارهای پایه
    ═══════════════════════════════════════════════ */
 window.ABRO = window.ABRO || {};
-window.ABRO.VERSION = '1.1.0';
+window.ABRO.VERSION = '2.3.0';
 
 (function (A) {
   'use strict';

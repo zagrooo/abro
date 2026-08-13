@@ -9,11 +9,11 @@
 
   var tab = 'shop', sheetOn = false, mult = '1';
   var armPrestige = null, armReset = null;
-  var goal = null, heatRef = 0;
+  var goal = null;
 
   var TAB_TITLE = {
     shop: 'ایستگاه‌ها', crew: 'نیرو و جا', grow: 'رشد و واگذاری',
-    book: 'دفترچه‌ی پدر', more: 'دفتر'
+    book: 'دفترچه‌ی پدر', store: 'فروشگاه', more: 'دفتر'
   };
 
   /* ═════════ تب و شیت ═════════ */
@@ -40,11 +40,9 @@
   }
   function isSheetOpen() { return sheetOn; }
 
-  /* ═════════ ساخت محتوای شیت ═════════ */
-  function svg(path, cls) {
-    return '<svg viewBox="0 0 24 24"' + (cls ? ' class="' + cls + '"' : '') + '>' + path + '</svg>';
-  }
+  function svg(path) { return '<svg viewBox="0 0 24 24">' + path + '</svg>'; }
 
+  /* ═════════ ساخت محتوای شیت ═════════ */
   function buildSheet() {
     var body = $('shBody');
     body.scrollTop = 0;
@@ -52,6 +50,7 @@
     else if (tab === 'crew') body.innerHTML = htmlCrew();
     else if (tab === 'grow') body.innerHTML = htmlGrow();
     else if (tab === 'book') body.innerHTML = htmlBook();
+    else if (tab === 'store') body.innerHTML = htmlStore();
     else body.innerHTML = htmlMore();
     if (tab === 'more') paintAvatars();
     syncSheet();
@@ -76,6 +75,9 @@
       '<div class="c-mid"><div class="c-name">استخدام</div><div class="c-meta" id="hireMeta">—</div></div>' +
       '<button class="buy" id="hireBtn">استخدام<span class="c" id="hireCost">—</span></button></div>' +
       '<div class="note" id="crewNote">—</div>' +
+      '<button class="autobtn" id="autoCrewBtn">' +
+      svg('<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>') +
+      '<span>چیدن خودکار نیروها</span><i id="autoCrewInfo">—</i></button>' +
       '<div class="sechead">چه کسی کجا بایستد</div>' +
       D.STATIONS.map(function (s) {
         return '<div class="card" data-crewcard="' + s.id + '">' +
@@ -105,7 +107,7 @@
       '<button class="buy" id="prestigeBtn">واگذاری<span class="c" id="prestigeGain">—</span></button></div>' +
       '<div class="note" id="growNote">—</div>' +
       '<div class="sechead">مسیر</div>' +
-      '<div class="note" id="roadmap">—</div>';
+      '<div class="roadmap" id="roadmap"></div>';
   }
 
   function htmlBook() {
@@ -119,6 +121,38 @@
           '<button class="n-buy" data-buy="' + n.id + '"><span data-t>ارتقا</span><span class="c" data-cost>—</span></button>' +
           '</div>';
       }).join('');
+  }
+
+  function htmlStore() {
+    var items = D.SHOP_ITEMS.map(function (it) {
+      return '<div class="card store-item" data-item="' + it.id + '">' +
+        '<div class="c-ico gem">' + svg(it.icon) + '</div>' +
+        '<div class="c-mid"><div class="c-name">' + it.name + '</div>' +
+        '<div class="c-meta" data-imeta>' + it.desc + '</div></div>' +
+        '<button class="buy gembuy" data-buyitem="' + it.id + '">' +
+        '<span class="gemrow"><svg viewBox="0 0 24 24" class="gemi"><path d="M6 3h12l4 6-10 12L2 9z"/></svg>' +
+        fa(it.gems) + '</span></button></div>';
+    }).join('');
+
+    var packs = D.GEM_PACKS.map(function (p) {
+      return '<button class="pack" data-pack="' + p.id + '">' +
+        (p.tag ? '<span class="pack-tag">' + p.tag + '</span>' : '') +
+        '<span class="pack-gem"><svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/></svg></span>' +
+        '<b>' + fa(p.gems) + '</b><span class="pack-price">' + p.price + '</span></button>';
+    }).join('');
+
+    return '<div class="gembar"><span class="gembar-l">الماس تو</span>' +
+      '<span class="gembar-v"><svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/></svg>' +
+      '<b id="storeGems">۰</b></span></div>' +
+      '<div class="sechead">با الماس بخر</div>' + items +
+      '<div class="sechead">الماس رایگان</div>' +
+      '<button class="adbtn" id="adGemBtn">' +
+      svg('<path d="M4 5h16v11H4z"/><path d="M10 8.5l4 2.5-4 2.5z"/><path d="M9 20h6"/>') +
+      '<span><b>تماشای تبلیغ</b><i id="adLeft">—</i></span><span class="adplus">+۲</span></button>' +
+      '<div class="sechead">بسته‌های الماس</div>' +
+      '<div class="packs">' + packs + '</div>' +
+      '<div class="note store-note">این فروشگاه <b>نمایشی</b> است. هیچ درگاه پرداختی وصل نیست و ' +
+      'هیچ پولی از حساب کسی کم نمی‌شود. برای گرفتن الماس واقعی، تبلیغ ببین یا نشان بگیر.</div>';
   }
 
   function htmlMore() {
@@ -159,12 +193,9 @@
       '<div class="seg" id="gfxSeg">' +
       '<button data-q="2">کامل</button><button data-q="1">متوسط</button><button data-q="0">سبک</button>' +
       '</div></div>' +
-      '<div class="note">«کامل» بلوم، بازتاب آسفالت و بوکه دارد. اگر گوشی داغ کرد بیاور پایین — ' +
-      'بازی خودش هم وقتی کند شود پایین می‌آورد.</div>' +
       '<div class="sechead">تنظیمات</div>' +
       '<button class="dangerbtn" id="resetBtn">پاک کردن همه‌چیز و شروع از صفر</button>' +
-      '<div class="note" style="margin-top:8px;text-align:center;border-style:solid;opacity:.7">' +
-      'آبرو — نسخه‌ی ' + fa(A.VERSION) + '</div>';
+      '<div class="note verline">آبرو — نسخه‌ی ' + fa(A.VERSION) + '</div>';
   }
 
   function paintAvatars() {
@@ -188,6 +219,7 @@
     var r = St.rate(), used = St.spaceUsed(), cap = St.spaceCap(), free = St.crewFree();
 
     if (tab === 'shop') {
+      var bestId = St.bestStationId();
       D.STATIONS.forEach(function (s) {
         var el = document.querySelector('[data-card="' + s.id + '"]');
         if (!el) return;
@@ -195,12 +227,16 @@
         var afford = !locked && !p.full && S.money >= p.c;
         el.classList.toggle('locked', locked);
         el.classList.toggle('ready', afford);
+        el.classList.toggle('best', !locked && s.id === bestId);
         el.querySelector('[data-lv]').textContent = fa(lvl);
         var meta = el.querySelector('[data-meta]');
         var sr = St.stationRate(s);
         if (locked) meta.textContent = 'در پرده‌ی ' + fa(s.tier + 1) + ' باز می‌شود';
-        else if (!lvl) meta.textContent = s.desc;
-        else meta.textContent = money(sr) + ' در ثانیه';
+        else {
+          /* جا محدود است، پس «هر جا چقدر می‌آورد» معیار درست خرید است */
+          meta.innerHTML = '<b class="gain">+' + money(St.marginalGain(s)) + '</b> برای هر جا' +
+            (lvl ? ' · الان ' + money(sr) + '/ث' : '');
+        }
         el.querySelector('[data-share]').style.width = (r > 0 ? clamp(sr / r * 100, 0, 100) : 0) + '%';
         var b = el.querySelector('[data-up]');
         b.disabled = locked || p.full || p.n <= 0;
@@ -210,19 +246,31 @@
       });
       var n = $('spaceNote');
       if (n) n.innerHTML = 'فضا: <b>' + fa(used) + ' از ' + fa(cap) + '</b> — هر سطح یک جا می‌گیرد. ' +
-        'بزرگ کردن یک شاخه یعنی بزرگ نکردن شاخه‌ی دیگر.';
+        'چون جا کم است، عددی که مهم است <b>«برای هر جا»</b> است نه قیمت. ' +
+        'ایستگاه‌های تازه گران‌ترند ولی هر جایشان خیلی بیشتر می‌آورد.';
 
     } else if (tab === 'crew') {
       var c = St.hireCost(), hb = $('hireBtn');
       if (hb) {
         $('hiredLv').textContent = fa(S.hired);
         $('hireCost').textContent = money(c);
-        $('hireMeta').textContent = 'دستمزد هر نفر ' + money(St.wage()) + ' در هر شیفت';
+        $('hireMeta').textContent = 'دستمزد هر نفر ' + money(St.wage()) + ' در هر هشت ساعت';
         hb.classList.toggle('can', S.money >= c);
       }
       var cn = $('crewNote');
+      var short = St.understaffed();
       if (cn) cn.innerHTML = 'نیروی بیکار: <b>' + fa(free) + '</b> از ' + fa(S.hired) +
-        ' — ایستگاه بدون نیرو فقط ۴۵٪ کار می‌کند.';
+        ' — ایستگاه بدون نیرو فقط ۴۵٪ کار می‌کند. نیروی زیادی هم دستمزد می‌برد.' +
+        (short ? '<br><b style="color:#f0a08e">' + fa(short) + ' ایستگاه نیروی کامل ندارد.</b>' : '');
+      var ab = $('autoCrewBtn'), ai = $('autoCrewInfo');
+      if (ab) {
+        var can = free > 0 && short > 0;
+        ab.classList.toggle('can', can);
+        ab.disabled = !can;
+        if (ai) ai.textContent = can
+          ? (fa(Math.min(free, short)) + ' نفر جابه‌جا می‌شود')
+          : (free <= 0 ? 'نیروی بیکار نداری' : 'همه سرِ جایشان هستند');
+      }
       D.STATIONS.forEach(function (s) {
         var el = document.querySelector('[data-crewcard="' + s.id + '"]');
         if (!el) return;
@@ -239,6 +287,7 @@
 
     } else if (tab === 'grow') {
       var t = St.tier(), tb = $('tierBtn'), cost = St.tierCost();
+      var blocked = St.tierBlocked();
       if (tb) {
         if (t.next) {
           $('tierName').textContent = t.next;
@@ -246,7 +295,7 @@
           $('tierCost').textContent = money(cost);
           $('tierBar').style.width = clamp(S.money / cost * 100, 0, 100) + '%';
           tb.disabled = false;
-          tb.classList.toggle('can', S.money >= cost);
+          tb.classList.toggle('can', !blocked);
         } else {
           $('tierName').textContent = 'بالاتر از این نیست';
           $('tierMeta').textContent = 'آخرین پرده. حالا فقط یک راه مانده.';
@@ -256,8 +305,14 @@
         }
       }
       var tn = $('tierNote');
-      if (tn) tn.innerHTML = 'پرده‌ی <b>' + fa(S.tier + 1) + ' از ' + fa(D.TIERS.length) + '</b> — ' + t.name +
-        '. ضریب درآمد این پرده <b>×' + fa(t.mult) + '</b>.';
+      if (tn) {
+        var reqTxt = t.next
+          ? ('سطح لازم: <b>' + fa(St.spaceUsed()) + ' از ' + fa(St.tierReq()) + '</b>' +
+            (St.spaceUsed() < St.tierReq() ? ' — هنوز کم داری' : ' ✓'))
+          : '';
+        tn.innerHTML = 'پرده‌ی <b>' + fa(S.tier + 1) + ' از ' + fa(D.TIERS.length) + '</b> — ' + t.name +
+          '. ضریب این پرده <b>×' + fa(t.mult) + '</b>.' + (reqTxt ? '<br>' + reqTxt : '');
+      }
       var pc = $('prestigeCard'), pb = $('prestigeBtn');
       var ok = St.canPrestige();
       if (pc) pc.classList.toggle('locked', !ok);
@@ -269,15 +324,17 @@
         }
       }
       var gn = $('growNote');
-      if (gn) gn.innerHTML = 'هر آبرو <b>۹٪</b> به درآمد اضافه می‌کند. ضریب فعلی <b>×' +
+      if (gn) gn.innerHTML = 'هر آبرو <b>۵٪</b> به درآمد اضافه می‌کند. ضریب فعلی <b>×' +
         fa(St.abrooMult().toFixed(2)) + '</b>. آبرو خرج‌شدنی هم هست — در دفترچه‌ی پدر.';
       var rm = $('roadmap');
       if (rm) {
         rm.innerHTML = D.TIERS.map(function (x, i) {
-          var mark = i < S.tier ? '✓' : (i === S.tier ? '◆' : '·');
-          var cls = i <= S.tier ? 'style="color:var(--gold)"' : '';
-          return '<span ' + cls + '>' + mark + ' ' + x.name + '</span>';
-        }).join('<br>');
+          var cls = i < S.tier ? 'done' : (i === S.tier ? 'now' : '');
+          var mark = i < S.tier ? '✓' : (i === S.tier ? '◆' : fa(i + 1));
+          return '<div class="rm ' + cls + '"><span class="rm-m">' + mark + '</span>' +
+            '<span class="rm-n">' + x.name + '</span>' +
+            '<span class="rm-c">' + (x.next ? money(x.cost) : '—') + '</span></div>';
+        }).join('');
       }
 
     } else if (tab === 'book') {
@@ -301,6 +358,28 @@
         b.querySelector('[data-t]').textContent = maxed ? 'کامل' : 'ارتقا';
         b.querySelector('[data-cost]').textContent = maxed ? '—' : fa(cost) + ' آبرو';
       });
+
+    } else if (tab === 'store') {
+      var sg = $('storeGems');
+      if (sg) sg.textContent = fa(M.gems || 0);
+      D.SHOP_ITEMS.forEach(function (it) {
+        var el = document.querySelector('[data-item="' + it.id + '"]');
+        if (!el) return;
+        var can = (M.gems || 0) >= it.gems;
+        el.classList.toggle('ready', can);
+        var b = el.querySelector('[data-buyitem]');
+        b.classList.toggle('can', can);
+        var meta = el.querySelector('[data-imeta]');
+        if (it.id === 'cash1') meta.textContent = 'همین حالا ' + money(Math.max(1000, St.rate() * 3600)) + ' تومان';
+        else if (it.id === 'boost' && St.boostLeft() > 0) {
+          meta.textContent = 'فعال — ' + fa(Math.ceil(St.boostLeft() / 60)) + ' دقیقه مانده';
+        } else meta.textContent = it.desc;
+      });
+      var left = St.adsLeft();
+      var al = $('adLeft');
+      if (al) al.textContent = left > 0 ? (fa(left) + ' بار امروز مانده') : 'فردا دوباره پر می‌شود';
+      var ab = $('adGemBtn');
+      if (ab) ab.classList.toggle('spent', left <= 0);
 
     } else {
       var l = $('ledger');
@@ -329,67 +408,135 @@
       set('kServed', fa(S.served || 0));
       set('kGoals', fa(S.goalsDone || 0));
       set('kBest', money(M.bestTotal || 0));
-      var st = A.scene.stats();
+      var stx = A.scene.stats();
       var gm = $('gfxMeta');
-      if (gm) gm.textContent = fa(st.ms) + ' میلی‌ثانیه در هر فریم';
+      if (gm) gm.textContent = fa(stx.ms) + ' میلی‌ثانیه در هر فریم';
       document.querySelectorAll('#gfxSeg button').forEach(function (b) {
-        b.classList.toggle('on', +b.dataset.q === st.quality);
+        b.classList.toggle('on', +b.dataset.q === stx.quality);
       });
     }
   }
 
   /* ═════════ HUD ═════════ */
   var lastMoneyText = '';
-  function syncHUD(disp, heat) {
+  function syncHUD(disp, heat, alsoSheet) {
     var S = St.S, M = St.M, t = St.tier();
     var r = St.rate();
-    heatRef = heat;
+    var closed = St.isClosed();
 
     var mt = money(disp);
     if (mt !== lastMoneyText) { $('money').textContent = mt; lastMoneyText = mt; }
     $('abroo').textContent = fa(M.abroo);
-    $('rateBadge').textContent = r > 0 ? money(r) + ' تومان در ثانیه' : 'هنوز چیزی نمی‌آید';
+    $('gems').textContent = fa(M.gems || 0);
+
+    /* نوار نرخ */
+    if (closed) {
+      /* نشان دادن مبلغ تخمینی — «۲۰ دقیقه» به بازیکن نمی‌گوید چقدر گیرش می‌آید */
+      var E = D.ECON;
+      var hrs = clamp((Date.now() - S.closedAt) / 3600e3, 0, E.closedCap);
+      var ing = D.ING[S.ing];
+      var lr = S.closedRate > 0 ? S.closedRate : r;
+      var gross = lr * 3600 * hrs * E.closedRate * (1 + .18 * St.book('night')) * ing.out;
+      var est = Math.max(0, gross - gross * ing.cost - S.hired * St.wage() * (hrs / 8));
+      var mins = Math.floor(hrs * 60);
+      $('rateBadge').textContent = mins < 1
+        ? 'بسته — تازه بستی'
+        : 'بسته ' + fa(mins) + ' دقیقه — حدود ' + money(est);
+      $('rateBadge').classList.add('closed');
+    } else {
+      $('rateBadge').textContent = r > 0 ? money(r) + ' تومان در ثانیه' : 'هنوز چیزی نمی‌آید';
+      $('rateBadge').classList.remove('closed');
+    }
+
     $('shopName').textContent = t.name;
     $('actLbl').textContent = 'پرده‌ی ' + fa(S.tier + 1) + '/' + fa(D.TIERS.length);
     $('integVal').textContent = fa(Math.round(S.integ));
+    /* اصالت باید اثرش دیده شود، نه فقط عددش */
+    $('integMul').textContent = '×' + fa(St.integMult().toFixed(2)) + ' درآمد';
     $('integProg').style.width = S.integ + '%';
     $('integTrack').classList.toggle('low', S.integ < 30);
 
     var cost = St.tierCost();
+    var blocked = St.tierBlocked();
     var prog = t.next ? clamp(S.money / cost * 100, 0, 100) : 100;
     $('actProg').style.width = prog + '%';
-    $('actTrack').classList.toggle('shine', prog >= 100);
+    $('actTrack').classList.toggle('shine', !blocked && !!t.next);
 
-    $('fabSub').textContent = heat > .08 ? '×' + fa((1 + heat * 1.5).toFixed(1)) : 'مشتری';
-    var fab = $('serveBtn');
-    fab.style.setProperty('--heat', (heat * 360).toFixed(0) + 'deg');
-    fab.classList.toggle('hot', heat > .6);
+    /* فضا و سطح لازم — دو عددی که تصمیم بازیکن را می‌سازند
+       ولی قبلاً فقط داخل شیت دیده می‌شدند */
+    var usedN = St.spaceUsed(), capN = St.spaceCap();
+    var cs = $('chipSpace');
+    cs.textContent = 'فضا ' + fa(usedN) + '/' + fa(capN);
+    cs.classList.toggle('full', usedN >= capN);
+    var cr = $('chipReq');
+    if (t.next) {
+      var need = St.tierReq(), ok = usedN >= need;
+      cr.hidden = false;
+      cr.textContent = (ok ? '✓ ' : '') + 'سطح ' + fa(usedN) + '/' + fa(need);
+      cr.classList.toggle('ok', ok);
+      cr.classList.toggle('warn', !ok && S.money >= cost);
+    } else cr.hidden = true;
+
+    /* دکمه‌ی سرو */
+    var fabB = $('fabLabel'), fabS = $('fabSub');
+    if (closed) {
+      fabB.textContent = 'باز کن';
+      fabS.textContent = 'مغازه';
+      $('serveBtn').classList.add('closed');
+    } else {
+      fabB.textContent = 'سرو';
+      fabS.textContent = heat > .08 ? '×' + fa((1 + heat).toFixed(1)) : 'مشتری';
+      $('serveBtn').classList.remove('closed');
+    }
+    $('serveBtn').style.setProperty('--heat', (heat * 360).toFixed(0) + 'deg');
+    $('serveBtn').classList.toggle('hot', heat > .6);
+    $('shiftLabel').textContent = closed ? 'باز کردن' : 'بستن';
+
+    /* کادو روی صحنه */
+    var gh = $('giftHint');
+    if (gh) gh.hidden = closed || !A.scene.hasGift();
+
+    /* تقویت */
+    var bl = St.boostLeft();
+    var bc = $('boostChip');
+    if (bl > 0) {
+      bc.hidden = false;
+      bc.querySelector('b').textContent = fa(Math.ceil(bl / 60)) + ' دقیقه';
+    } else bc.hidden = true;
 
     /* نشان‌های تب */
     var used = St.spaceUsed(), cap = St.spaceCap();
     var bShop = false;
-    if (used < cap) {
+    if (used < cap && !closed) {
       for (var i = 0; i < D.STATIONS.length; i++) {
         var s = D.STATIONS[i];
         if (S.tier >= s.tier && S.money >= St.upCost(s)) { bShop = true; break; }
       }
     }
     $('bShop').hidden = !bShop;
-    $('bCrew').hidden = !(S.money >= St.hireCost() || St.crewFree() > 0);
-    $('bGrow').hidden = !((t.next && S.money >= cost) || (St.canPrestige() && St.abrooGain() > 0 && S.tier >= 4));
+    /* نشان نیرو باید وقتی ایستگاهی نیروی کم دارد هم روشن شود —
+       قبلاً بازیکن متوجه افت کارایی نمی‌شد */
+    $('bCrew').hidden = !(!closed && (
+      (St.crewFree() > 0 && St.understaffed() > 0) ||
+      (St.understaffed() > 0 && S.money >= St.hireCost())
+    ));
+    $('bGrow').hidden = !(t.next && !St.tierBlocked());
     var bBook = D.BOOK.some(function (n) {
       var lv = St.book(n.id);
       return lv < n.max && M.abroo >= n.cost(lv);
     });
     $('bBook').hidden = !bBook;
-    syncSheet();
+    var bStore = D.SHOP_ITEMS.some(function (it) { return (M.gems || 0) >= it.gems; });
+    $('bStore').hidden = !bStore;
+
+    if (alsoSheet !== false) syncSheet();
   }
 
   /* ═════════ سفارش ویژه ═════════ */
   function setGoal(g) { goal = g; syncGoal(); }
   function syncGoal() {
     var box = $('goalBox');
-    if (!goal) { box.hidden = true; return; }
+    if (!goal || St.isClosed()) { box.hidden = true; return; }
     box.hidden = false;
     $('goalText').textContent = goal.txt;
     $('goalProg').style.width = clamp(goal.have / goal.need * 100, 0, 100) + '%';
@@ -404,11 +551,6 @@
     $('evNight').textContent = 'شب ' + fa(night);
     $('evTitle').textContent = ev.t;
     $('evText').textContent = ev.x;
-    $('evVeil').hidden = false;
-    var art = $('evArt');
-    art.width = Math.round((art.clientWidth || 380) * 2);
-    art.height = Math.round((art.clientHeight || 96) * 2);
-    A.scene.drawEventArt(art, ev.art || '', 0);
 
     var pick = $('evPick');
     pick.replaceChildren();
@@ -428,34 +570,46 @@
       b.addEventListener('click', function () { onPick(o); });
       pick.appendChild(b);
     });
+
+    /* اول محتوا کامل ساخته می‌شود، بعد کارت نشان داده می‌شود —
+       وگرنه یک لحظه دکمه‌های رویداد قبلی دیده می‌شد */
+    $('evVeil').hidden = false;
+    var art = $('evArt');
+    art.width = Math.round((art.clientWidth || 380) * 2);
+    art.height = Math.round((art.clientHeight || 96) * 2);
+    A.scene.drawEventArt(art, ev.art || '', 0);
   }
   function hideEvent() { $('evVeil').hidden = true; }
 
   /* ═════════ فاکتور ═════════ */
   function showReceipt(d, onAd, onOk, onCopy) {
-    $('rcTitle').textContent = d.manual ? 'گزارش شیفت' : 'گزارش غیبت';
+    $('rcTitle').textContent = d.closed ? 'گزارش شبِ بسته' : 'گزارش غیبت';
     $('rcSub').textContent = 'شب ' + fa(d.day) + ' — ' + d.tierName;
     var rows = [
+      ['مدت', 0, '', U.timeAgo(d.hours * 3600)],
       ['فروش ناخالص', d.gross, 'pos'],
       ['مواد اولیه (' + D.ING[d.ing].label + ')', -d.ingCost, 'neg'],
       ['دستمزد ' + fa(d.hired) + ' نفر', -d.wages, 'neg']
     ];
-    if (d.manual && Math.abs(d.luck - 1) > .12) {
-      rows.push([d.luck > 1 ? 'شب بهتر از انتظار' : 'شب کساد', 0, d.luck > 1 ? 'pos' : 'neg']);
+    if (d.closed && Math.abs(d.luck - 1) > .1) {
+      rows.push([d.luck > 1 ? 'شب بهتر از انتظار' : 'شب کساد', 0, d.luck > 1 ? 'pos' : 'neg',
+      (d.luck > 1 ? '+' : '−') + fa(Math.round(Math.abs(d.luck - 1) * 100)) + '٪']);
     }
-    if (d.awayHours) rows.push(['مدت غیبت', 0, '']);
     $('rcRows').innerHTML = rows.map(function (row, i) {
-      var val = row[1] ? ((row[1] < 0 ? '−' : '+') + money(Math.abs(row[1]))) :
-        (row[0] === 'مدت غیبت' ? U.timeAgo(d.awayHours * 3600) : '—');
-      return '<div class="r-row ' + row[2] + '" style="animation-delay:' + (i * 90 + 130) + 'ms">' +
+      var val = row[3] != null ? row[3]
+        : (row[1] ? ((row[1] < 0 ? '−' : '+') + money(Math.abs(row[1]))) : '—');
+      return '<div class="r-row ' + row[2] + '" style="animation-delay:' + (i * 85 + 130) + 'ms">' +
         '<span class="k">' + row[0] + '</span><span class="num">' + val + '</span></div>';
     }).join('');
     $('rcNote').textContent = d.note;
     $('rcNet').textContent = money(d.net);
-    $('rcAd').disabled = false;
-    $('rcAd').textContent = 'تماشای تبلیغ: خالص شب دو برابر';
+    var ad = $('rcAd');
+    ad.disabled = !d.adReady;
+    ad.textContent = d.adReady
+      ? 'تماشای تبلیغ: خالص شب دو برابر'
+      : 'برای دو برابر کردن، حداقل ' + fa(D.ECON.adMinMinutes) + ' دقیقه بسته بماند';
     $('rcVeil').hidden = false;
-    $('rcAd').onclick = onAd;
+    ad.onclick = onAd;
     $('rcOk').onclick = onOk;
     $('rcCopy').onclick = onCopy;
   }
@@ -464,6 +618,32 @@
     if (done) { $('rcAd').disabled = true; $('rcAd').textContent = 'دو برابر شد'; }
   }
   function hideReceipt() { $('rcVeil').hidden = true; }
+
+  /* ═════════ کادو ═════════ */
+  function showGift(reward, onTake, onTriple) {
+    var isAbroo = reward.type === 'abroo';
+    var one = isAbroo ? (fa(reward.amount) + ' آبرو') : (money(reward.amount) + ' تومان');
+    var three = isAbroo ? (fa(reward.amount * 3) + ' آبرو') : (money(reward.amount * 3) + ' تومان');
+    $('giftKind').textContent = isAbroo ? 'یک نفر آبرویت را برد بالا' : 'یکی چیزی گذاشت کف دستت';
+    $('giftOne').textContent = one;
+    $('giftThree').textContent = three;
+    var veil = $('giftVeil');
+    veil.hidden = false;
+    $('giftTake').onclick = onTake;
+    $('giftTriple').onclick = onTriple;
+    /* راه فرار: زدن بیرون کارت = گرفتن جایزه‌ی ساده.
+       بدون این، اگر دکمه‌ای خطا بدهد کل بازی پشت مودال گیر می‌کند. */
+    veil.onclick = function (e) { if (e.target === veil) onTake(); };
+  }
+  function hideGift() { $('giftVeil').hidden = true; }
+
+  /* ═════════ اعلان خرید ═════════ */
+  function showBuyNotice(pack) {
+    $('buyGems').textContent = fa(pack.gems);
+    $('buyPrice').textContent = pack.price;
+    $('buyVeil').hidden = false;
+    $('buyOk').onclick = function () { $('buyVeil').hidden = true; };
+  }
 
   /* ═════════ کارت پرده ═════════ */
   var actTimer = null;
@@ -496,6 +676,7 @@
   var coachEl = null;
   function coach(text, anchorEl, dir, onDone) {
     hideCoach();
+    if (!anchorEl) return;
     var el = document.createElement('div');
     el.className = 'coach ' + (dir || 'down');
     el.innerHTML = '<b>راهنما</b>' + text + '<button class="ok">باشد</button>';
@@ -529,7 +710,6 @@
       });
     });
 
-    /* کشیدن شیت به پایین */
     (function () {
       var y0 = null;
       var sh = $('sheet');
@@ -542,7 +722,6 @@
       sh.addEventListener('touchend', function () { y0 = null; });
     })();
 
-    /* کلیک‌های داخل شیت */
     $('shBody').addEventListener('click', function (e) {
       var G = A.game;
       var up = e.target.closest('[data-up]');
@@ -550,10 +729,16 @@
       var cw = e.target.closest('[data-crew]');
       if (cw) { G.assignCrew(cw.dataset.id, +cw.dataset.crew); return; }
       if (e.target.closest('#hireBtn')) { G.hire(e.target.closest('#hireBtn')); return; }
+      if (e.target.closest('#autoCrewBtn')) { G.autoCrew(); return; }
       if (e.target.closest('#tierBtn')) { G.upgradeTier(); return; }
       if (e.target.closest('#prestigeBtn')) { clickPrestige(); return; }
       var nb = e.target.closest('[data-buy]');
       if (nb) { G.buyBook(nb.dataset.buy); return; }
+      var ib = e.target.closest('[data-buyitem]');
+      if (ib) { G.buyItem(ib.dataset.buyitem, ib); return; }
+      var pk = e.target.closest('[data-pack]');
+      if (pk) { G.buyGemPack(pk.dataset.pack); return; }
+      if (e.target.closest('#adGemBtn')) { G.watchAdForGems(); return; }
       if (e.target.closest('#resetBtn')) { clickReset(); return; }
       var q = e.target.closest('[data-q]');
       if (q) {
@@ -602,6 +787,8 @@
     setGoal: setGoal, syncGoal: syncGoal,
     showEvent: showEvent, hideEvent: hideEvent,
     showReceipt: showReceipt, setReceiptNet: setReceiptNet, hideReceipt: hideReceipt,
+    showBuyNotice: showBuyNotice,
+    showGift: showGift, hideGift: hideGift,
     showAct: showAct, showEnding: showEnding,
     coach: coach, hideCoach: hideCoach,
     paintAvatars: paintAvatars,

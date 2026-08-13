@@ -6,15 +6,16 @@
 
   var U = A.util, D = A.data, St = A.state, Sc = A.scene, UI = A.ui, AU = A.audio;
   var $ = U.$, fa = U.fa, money = U.money, clamp = U.clamp, rnd = U.rnd;
+  var E = D.ECON;
 
-  var disp = 0, heat = 0, evTimer = 55, goal = null, goalTimer = 40;
-  var lastFrame = performance.now(), coinTimer = 0, saveTimer = 0, hudTimer = 0;
-  var rcNet = 0, rcUsedAd = false, hiddenAt = 0, booted = false;
+  var disp = 0, heat = 0, evTimer = 65, goal = null, goalTimer = 45;
+  var lastFrame = performance.now(), coinTimer = 0, saveTimer = 0, hudTimer = 0, sheetTick = false;
+  var rcNet = 0, rcHours = 0, rcUsedAd = false, hiddenAt = 0, booted = false;
 
   function S() { return St.S; }
   function M() { return St.M; }
 
-  var MODALS = ['shiftVeil', 'evVeil', 'rcVeil', 'actVeil', 'enVeil', 'intro'];
+  var MODALS = ['shiftVeil', 'evVeil', 'rcVeil', 'actVeil', 'enVeil', 'intro', 'buyVeil', 'giftVeil'];
   function anyModal() {
     for (var i = 0; i < MODALS.length; i++) {
       var el = $(MODALS[i]);
@@ -25,6 +26,7 @@
 
   /* ═════════ خرید و کنش ═════════ */
   function buyStation(id, mult, btn) {
+    if (St.isClosed()) { AU.sfx.no(); U.toast('مغازه بسته است.', 'bad'); return; }
     var s = D.STATIONS.find(function (x) { return x.id === id; });
     if (!s) return;
     if (S().tier < s.tier) { AU.sfx.no(); return; }
@@ -63,11 +65,29 @@
     afterChange();
   }
 
+  function autoCrew() {
+    var n = St.autoAssign();
+    if (!n) { AU.sfx.no(); return; }
+    AU.sfx.buy(); U.buzz(10);
+    U.toast(fa(n) + ' نفر سرِ جایشان رفتند.', 'good');
+    afterChange();
+  }
+
   function upgradeTier() {
-    var t = St.tier(), cost = St.tierCost();
-    if (!t.next || S().money < cost) { AU.sfx.no(); return; }
-    S().money -= cost; disp = S().money;
+    var blocked = St.tierBlocked();
+    if (blocked) {
+      AU.sfx.no();
+      if (blocked === 'levels') {
+        U.toast('برای این پرده حداقل ' + fa(St.tierReq()) + ' سطح ایستگاه لازم داری. الان ' +
+          fa(St.spaceUsed()) + ' داری.', 'bad');
+      } else if (blocked === 'money') {
+        U.toast('هنوز ' + money(St.tierCost() - S().money) + ' تومان کم داری.', 'bad');
+      }
+      return;
+    }
+    S().money -= St.tierCost(); disp = S().money;
     S().tier++;
+    St.addGems(3);
     Sc.reset();
     Sc.setTier(S().tier);
     Sc.punch(1);
@@ -96,7 +116,7 @@
   function prestige() {
     var g = St.doPrestige();
     disp = S().money;
-    heat = 0; goal = null; goalTimer = 40; evTimer = 55;
+    heat = 0; goal = null; goalTimer = 45; evTimer = 65;
     Sc.reset(); Sc.setTier(0); Sc.snapCamera();
     UI.closeSheet();
     UI.setGoal(null);
@@ -107,7 +127,7 @@
 
   function hardReset() {
     St.wipe();
-    disp = 0; heat = 0; goal = null; goalTimer = 40; evTimer = 55;
+    disp = 0; heat = 0; goal = null; goalTimer = 45; evTimer = 65;
     Sc.reset(); Sc.setTier(0); Sc.snapCamera();
     UI.setGoal(null);
     UI.buildSheet();
@@ -120,7 +140,7 @@
     if (got.length) {
       got.forEach(function (b, i) {
         setTimeout(function () {
-          U.toast('نشان گرفتی: ' + b.name + ' (+' + fa(b.r) + ' آبرو)', 'good');
+          U.toast('نشان گرفتی: ' + b.name + ' (+' + fa(b.r) + ' آبرو، +۱ الماس)', 'good');
           AU.sfx.badge();
         }, i * 900);
       });
@@ -129,9 +149,131 @@
     St.save();
   }
 
+  /* ═════════ فروشگاه ═════════ */
+  function buyGemPack(id) {
+    var p = D.GEM_PACKS.find(function (x) { return x.id === id; });
+    if (!p) return;
+    UI.showBuyNotice(p);
+  }
+
+  function watchAdForGems() {
+    if (!St.useAd()) {
+      U.toast('سهمیه‌ی امروز تمام شد. فردا دوباره پر می‌شود.', 'bad');
+      AU.sfx.no();
+      return;
+    }
+    St.addGems(2);
+    AU.sfx.win(); U.buzz([10, 30, 10]);
+    U.toast('+۲ الماس', 'good');
+    afterChange();
+  }
+
+  function buyItem(id, btn) {
+    var it = D.SHOP_ITEMS.find(function (x) { return x.id === id; });
+    if (!it) return;
+    if (!St.spendGems(it.gems)) {
+      AU.sfx.no();
+      U.toast('الماس کافی نداری.', 'bad');
+      return;
+    }
+    switch (id) {
+      case 'cash1': {
+        var g = Math.max(1000, St.rate() * 3600);
+        S().money += g; S().total += g; disp = S().money;
+        Sc.spawnCoin(g, true); U.flyCoins(btn, 8);
+        U.toast('+' + money(g) + ' تومان', 'good');
+        break;
+      }
+      case 'boost':
+        S().boostUntil = Math.max(Date.now(), S().boostUntil) + 30 * 60 * 1000;
+        U.toast('نیم ساعت درآمد دو برابر شد.', 'good');
+        Sc.punch(.7);
+        break;
+      case 'crew':
+        S().hired++;
+        U.toast('یک نیروی تازه آمد.', 'good');
+        break;
+      case 'abroo':
+        M().abroo += 3; M().abrooTotal += 3;
+        U.toast('+۳ آبرو', 'good');
+        break;
+      case 'space':
+        M().spaceBonus = (M().spaceBonus || 0) + 5;
+        U.toast('پنج جای دائمی اضافه شد.', 'good');
+        break;
+      case 'integ':
+        St.applyInteg(20);
+        D.PEOPLE.forEach(function (p) { S().people[p.id] = clamp(S().people[p.id] + 8, 0, 100); });
+        U.toast('کوچه راضی شد.', 'good');
+        break;
+    }
+    AU.sfx.buy(); U.buzz(12);
+    afterChange();
+  }
+
+  /* ═════════ کادو ═════════ */
+  var pendingGift = null;
+
+  /* جایزه متناسب با جایی که بازیکن در بازی هست */
+  function giftReward() {
+    var r = St.rate();
+    var tier = S().tier;
+    /* از پرده‌ی پنجم به بعد گاهی به جای سکه، آبرو می‌دهد */
+    if (tier >= 4 && Math.random() < .22) {
+      return { type: 'abroo', amount: 1 + Math.floor(tier / 4) };
+    }
+    var coins = Math.max(300 * (1 + tier * 2), r * 150);
+    return { type: 'money', amount: Math.round(coins) };
+  }
+
+  function tapGift(wx, wy) {
+    if (anyModal() || St.isClosed()) return false;
+    var carrier = Sc.hitGift(wx, wy);
+    if (!carrier) return false;
+    Sc.takeGift(carrier);
+    pendingGift = giftReward();
+    AU.sfx.win(); U.buzz([12, 40, 12]);
+    UI.showGift(pendingGift, claimGift, claimGiftTripled);
+    return true;
+  }
+
+  function grantGift(g, mul) {
+    if (!g) return;
+    var amount = Math.round(g.amount * mul);
+    if (g.type === 'abroo') {
+      M().abroo += amount; M().abrooTotal += amount;
+      U.toast('کادو باز شد: +' + fa(amount) + ' آبرو', 'good');
+    } else {
+      S().money += amount; S().total += amount;
+      disp = S().money;
+      Sc.spawnCoin(amount, true);
+      U.flyCoins($('giftTake'), 8);
+      U.toast('کادو باز شد: +' + money(amount) + ' تومان', 'good');
+    }
+    AU.sfx.coin();
+    afterChange();
+  }
+  /* جایزه را قبل از بستن کادر می‌دهیم؛ وگرنه سکه‌ها از یک عنصر
+     پنهان پرواز می‌کردند، یعنی از گوشه‌ی صفحه. */
+  function claimGift() {
+    grantGift(pendingGift, 1);
+    pendingGift = null;
+    UI.hideGift();
+  }
+  function claimGiftTripled() {
+    /* عمداً از سهمیه‌ی تبلیغ فروشگاه کم نمی‌شود — دو چیز جدا هستند */
+    grantGift(pendingGift, 3);
+    pendingGift = null;
+    UI.hideGift();
+  }
+
   /* ═════════ سرو ═════════ */
   function serve(fromScene, wx, wy) {
     if (anyModal()) return;
+    if (St.isClosed()) {
+      if (!fromScene) openShop();
+      return;
+    }
     var v = St.tapValue(heat);
     S().money += v; S().total += v;
     S().served = (S().served || 0) + 1;
@@ -151,12 +293,12 @@
   function newGoal() {
     var g = U.pick(D.GOALS);
     var n = Math.round(rnd(g.n[0], g.n[1]));
-    var r = Math.max(St.rate(), 200);
+    var r = Math.max(St.rate(), 60);
     var need = g.type === 'earn' ? Math.round(r * n) : n;
     goal = {
       type: g.type, need: need, have: 0, left: g.t, done: false,
       txt: g.txt(n, need),
-      reward: Math.max(1e4, g.type === 'earn' ? need * 1.15 : r * 40)
+      reward: Math.max(2000, g.type === 'earn' ? need * 1.1 : r * E.goalWindow)
     };
     UI.setGoal(goal);
   }
@@ -179,7 +321,7 @@
     } else if (goal.left <= 0) {
       goal = null;
       UI.setGoal(null);
-      goalTimer = rnd(50, 85);
+      goalTimer = rnd(55, 90);
     }
   }
   function claimGoal() {
@@ -193,7 +335,7 @@
     U.flyCoins($('goalClaim'), 6);
     goal = null;
     UI.setGoal(null);
-    goalTimer = rnd(60, 100);
+    goalTimer = rnd(65, 110);
     afterChange();
   }
 
@@ -207,14 +349,17 @@
     return U.pick(pool);
   }
   function fireEvent(ev) {
-    if (anyModal() || !St.spaceUsed()) return;
+    if (anyModal() || !St.spaceUsed() || St.isClosed()) return;
     ev = ev || pickEvent();
     AU.sfx.event(); U.buzz(20);
     if (ev.rain) Sc.rainFor(18000);
     UI.showEvent(ev, S().day + 1, function (o) {
-      var base = Math.max(St.rate() * 900, 30e3);
-      var luckMul = 1 + .15 * St.book('luck');
-      var dm = Math.round(base * o.m * (o.m > 0 ? luckMul : (St.perkOn('raqib') && ev.who === 'raqib' ? .5 : 2 - luckMul)));
+      var base = Math.max(St.rate() * E.eventWindow, 8e3);
+      var mult = o.m;
+      if (mult > 0) mult *= 1 + .15 * St.book('luck');
+      else if (St.perkOn('raqib') && ev.who === 'raqib') mult *= .5;
+      else mult *= 1 - .15 * St.book('luck');
+      var dm = Math.round(base * mult);
       S().money = Math.max(0, S().money + dm);
       if (dm > 0) S().total += dm; else disp = S().money;
       St.applyInteg(o.i);
@@ -228,11 +373,13 @@
     });
   }
 
-  /* ═════════ شیفت ═════════ */
+  /* ═════════ بستن و باز کردن مغازه ═════════ */
   function buildShiftOptions() {
     $('ingOpts').innerHTML = Object.keys(D.ING).map(function (k) {
+      var g = D.ING[k];
       return '<label class="opt"><input type="radio" name="ing" value="' + k + '">' +
-        '<span><b>' + D.ING[k].label + '</b><i>' + D.ING[k].note + '</i></span></label>';
+        '<span><b>' + g.label + '</b><i>' + g.note +
+        '<br>اصالت می‌نشیند روی ' + fa(g.target) + '</i></span></label>';
     }).join('');
     $('riskOpts').innerHTML = Object.keys(D.RISK).map(function (k) {
       return '<label class="opt"><input type="radio" name="risk" value="' + k + '">' +
@@ -252,14 +399,16 @@
   function updateForecast() {
     var p = readShiftPick();
     var ing = D.ING[p.ing];
-    var gross = St.rate() * 3600 * 8 * .62 * ing.out;
-    var net = Math.max(0, gross - gross * ing.cost - S().hired * St.wage());
-    $('fcNet').textContent = money(net);
-    $('fcInteg').textContent = (ing.integ >= 0 ? '+' : '−') + fa(Math.abs(ing.integ));
+    var perHour = St.rate() * 3600 * E.closedRate * ing.out * (1 + .18 * St.book('night'));
+    var netHour = Math.max(0, perHour - perHour * ing.cost - S().hired * St.wage() / 8);
+    $('fcNet').textContent = money(netHour);
+    /* «اصالت −۱» به بازیکن هیچ نمی‌گفت. حالا می‌گوید کجا می‌نشیند. */
+    $('fcInteg').textContent = 'می‌نشیند روی ' + fa(ing.target);
   }
-  function openShift() {
+  function openShiftPlan() {
     if (anyModal()) return;
     if (!St.spaceUsed()) { AU.sfx.no(); U.toast('اول یک ایستگاه راه بینداز.', 'bad'); return; }
+    if (St.isClosed()) { openShop(); return; }
     UI.closeSheet();
     var i = document.querySelector('input[name=ing][value="' + S().ing + '"]');
     if (i) i.checked = true;
@@ -268,20 +417,49 @@
     updateForecast();
     $('shiftVeil').hidden = false;
   }
-  function confirmShift() {
+
+  /* کرکره را پایین می‌کشی. از این لحظه درآمد شب حساب می‌شود. */
+  function closeShop() {
     var p = readShiftPick();
     S().ing = p.ing; S().risk = p.risk;
+    S().closedAt = Date.now();
+    /* نرخ همان لحظه‌ی بستن قفل می‌شود. وگرنه می‌شد ده ساعت بسته گذاشت،
+       بعد درست قبل از باز کردن «شب شلوغ» خرید و کل شب را دو برابر کرد. */
+    S().closedRate = St.rate();
     $('shiftVeil').hidden = true;
-    runShift(8, true);
+    heat = 0;
+    Sc.reset();
+    AU.sfx.close();
+    U.toast('مغازه بست. هر چه بیشتر بماند، شب پربارتر است.', 'good');
+    afterChange();
   }
 
-  function runShift(hours, manual) {
-    hours = clamp(Number(hours) || 0, 0, 14);
+  /* باز کردن: هرچه از لحظه‌ی بستن گذشته حساب می‌شود */
+  function openShop() {
+    if (!St.isClosed()) return;
+    var hours = clamp((Date.now() - S().closedAt) / 3600e3, 0, E.closedCap);
+    var lockedRate = S().closedRate > 0 ? S().closedRate : St.rate();
+    S().closedAt = 0;
+    S().closedRate = 0;
+    S().openedAt = Date.now();
+    AU.sfx.open();
+    if (hours * 3600 < 8) {
+      U.toast('همین الان بستی. چیزی جمع نشده.');
+      afterChange();
+      return;
+    }
+    runShift(hours, true, lockedRate);
+  }
+
+  /* ═════════ حساب شب ═════════ */
+  function runShift(hours, wasClosed, rateOverride) {
+    hours = clamp(Number(hours) || 0, 0, E.closedCap);
     if (hours <= 0 || !St.spaceUsed()) return;
     var ing = D.ING[S().ing], rk = D.RISK[S().risk];
-    var luck = manual ? (rk.lo + Math.random() * (rk.hi - rk.lo)) : 1;
-    var eff = manual ? .62 : .5 * (1 + .2 * St.book('night'));
-    var gross = St.rate() * 3600 * hours * eff * ing.out * luck;
+    var luck = wasClosed ? (rk.lo + Math.random() * (rk.hi - rk.lo)) : 1;
+    var eff = wasClosed ? E.closedRate * (1 + .18 * St.book('night')) : E.openOfflineRate;
+    var useRate = rateOverride > 0 ? rateOverride : St.rate();
+    var gross = useRate * 3600 * hours * eff * ing.out * luck;
     var ingCost = gross * ing.cost;
     var wages = S().hired * St.wage() * (hours / 8);
     var net = Math.max(0, gross - ingCost - wages);
@@ -289,20 +467,21 @@
 
     S().day++;
     S().money += net; S().total += net;
-    St.applyInteg(manual ? ing.integ : ing.integ * .4);
+    St.applyInteg(wasClosed ? ing.integ : ing.integ * .4);
     S().lastNote = note;
 
-    rcNet = net; rcUsedAd = false;
+    rcNet = net; rcHours = hours; rcUsedAd = false;
     UI.showReceipt({
-      manual: manual, day: S().day, tierName: St.tier().name, ing: S().ing,
+      closed: wasClosed, day: S().day, tierName: St.tier().name, ing: S().ing,
       gross: gross, ingCost: ingCost, wages: wages, net: net, luck: luck,
-      hired: S().hired, note: note, awayHours: manual ? 0 : hours
+      hired: S().hired, note: note, hours: hours,
+      adReady: hours * 60 >= E.adMinMinutes
     }, onAd, onReceiptOk, onCopy);
     AU.sfx.print();
     afterChange();
   }
   function onAd() {
-    if (rcUsedAd) return;
+    if (rcUsedAd || rcHours * 60 < E.adMinMinutes) { AU.sfx.no(); return; }
     rcUsedAd = true;
     S().money += rcNet; S().total += rcNet;
     rcNet *= 2;
@@ -345,42 +524,67 @@
     St.save();
   }
 
-  /* ═════════ راهنمای اول ═════════ */
+  /* ═════════ راهنما ═════════ */
   function maybeCoach(step) {
     if (M().coached & (1 << step)) return;
     M().coached |= (1 << step);
     St.save();
     if (step === 1) {
       UI.coach('این دکمه را بزن. هر بار یک مشتری سرو می‌کنی و پول می‌آید. تند بزنی، گرم می‌شود و بیشتر می‌دهد.',
-        $('serveBtn'), 'down', function () { });
+        $('serveBtn'), 'down');
     } else if (step === 2) {
-      UI.coach('پول جمع شد. برو توی «ایستگاه‌ها» و اجاق را راه بینداز تا بدون تو هم درآمد بیاید.',
+      UI.coach('پول جمع شد. برو توی «ایستگاه» و اجاق را راه بینداز تا بدون تو هم درآمد بیاید.',
         $('tabShop'), 'down');
     } else if (step === 3) {
       setTimeout(function () {
-        UI.coach('وقتی می‌خواهی بروی، «بستن» را بزن. شیفت را می‌چینی و صبح گزارشش را می‌بینی.',
+        UI.coach('وقتی می‌خواهی بروی، «بستن» را بزن. تا وقتی بسته است درآمد شب جمع می‌شود؛ برگردی، فاکتورش را می‌بینی.',
           $('shiftBtn'), 'up');
       }, 1200);
     }
   }
 
   /* ═════════ حلقه ═════════ */
+  var loopErrors = 0;
+
+  /* حفاظ: اگر یک استثنا از حلقه بیرون بزند، rAF دیگر زمان‌بندی نمی‌شود
+     و بازی برای همیشه یخ می‌کند — یکی از علت‌های «صفحه‌ی سیاه». */
   function loop(now) {
+    try {
+      frame(now);
+    } catch (e) {
+      loopErrors++;
+      if (window.console) console.error('حلقه:', e);
+      if (loopErrors === 3) {
+        /* بار سوم یعنی چیزی واقعاً خراب است؛ کیفیت را پایین می‌بریم
+           تا دست‌کم بازی بچرخد */
+        try { Sc.setQuality(0); } catch (e2) { }
+        U.toast('یک مشکل تصویری پیش آمد. کیفیت آمد پایین.', 'bad');
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function frame(now) {
     var dt = clamp((now - lastFrame) / 1000, 0, .25);
     lastFrame = now;
     var T = now / 1000;
+    /* تا وقتی صفحه‌ی بارگذاری کارش تمام نشده، صحنه هنوز آماده نیست */
+    if (!booted) return;
     var open = !anyModal();
+    var closed = St.isClosed();
 
     heat = Math.max(0, heat - dt * .3);
 
     var r = St.rate();
-    if (open) {
+    if (open && !closed) {
       S().money += r * dt;
       S().total += r * dt;
-      St.applyInteg(D.ING[S().ing].integ * .02 * dt);
+      /* اصالت به سمت هدفِ موادِ انتخابی می‌رود، نه به سمت صفر.
+         انتخاب مواد یعنی «کجا بایستد»، نه «با چه شیبی سقوط کند». */
+      St.driftInteg(D.ING[S().ing].target, dt);
 
       evTimer -= dt;
-      if (evTimer <= 0) { evTimer = 55 + Math.random() * 45; fireEvent(); }
+      if (evTimer <= 0) { evTimer = 70 + Math.random() * 60; fireEvent(); }
 
       if (r > 0 && !U.reduceMotion) {
         coinTimer -= dt;
@@ -388,58 +592,73 @@
       }
       goalTick(dt, r);
 
-      if (!S().ended && St.isLast() && S().total > D.TIERS[10].cost * 1.4) triggerEnding();
+      /* شاخص ثابت شکننده بود؛ اگر تعداد پرده‌ها عوض شود از کار می‌افتاد */
+      if (!S().ended && St.isLast() && S().total > D.TIERS[D.TIERS.length - 2].cost * 1.4) triggerEnding();
     }
 
     disp += (S().money - disp) * Math.min(1, dt * 6);
     if (Math.abs(S().money - disp) < 1) disp = S().money;
 
     var W = {
-      rate: r, tier: clamp(S().tier | 0, 0, D.TIERS.length - 1),
-      lvl: S().lvl, crew: St.crewUsed(), heat: heat,
+      rate: closed ? 0 : r, tier: clamp(S().tier | 0, 0, D.TIERS.length - 1),
+      lvl: S().lvl, crew: closed ? 0 : St.crewUsed(), heat: heat,
+      closed: closed,
       brandLit: S().lvl.brand > 0 || S().tier >= 3
     };
     Sc.update(dt, T, W);
     Sc.render(T, W);
 
+    /* HUD شش بار در ثانیه، ولی محتوای شیت سه بار — شیت به‌روزرسانی
+       سنگین‌تری دارد و چشم فرقش را نمی‌فهمد */
     hudTimer -= dt;
     if (hudTimer <= 0) {
       hudTimer = .16;
-      UI.syncHUD(disp, heat);
+      sheetTick = !sheetTick;
+      UI.syncHUD(disp, heat, sheetTick);
       UI.syncGoal();
     }
 
     saveTimer -= dt;
     if (saveTimer <= 0) { saveTimer = 8; St.save(); }
 
-    if (booted && !M().coached && S().money > 900 && St.spaceUsed() === 0) maybeCoach(2);
-
-    requestAnimationFrame(loop);
+    if (booted && !(M().coached & 4) && S().money > 200 && St.spaceUsed() === 0) maybeCoach(2);
   }
 
   /* ═════════ غیبت ═════════ */
   function onVisible() {
-    if (document.hidden) { hiddenAt = Date.now(); St.save(); return; }
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      St.save();
+      /* موسیقی و AudioContext در پس‌زمینه باتری می‌خوردند */
+      AU.stopMusic();
+      AU.suspend();
+      return;
+    }
     lastFrame = performance.now();
+    if (M().sound) { AU.resume(); AU.startMusic(); }
     if (!hiddenAt) return;
-    var away = clamp((Date.now() - hiddenAt) / 1000, 0, 14 * 3600);
+    var away = clamp((Date.now() - hiddenAt) / 1000, 0, 24 * 3600);
     hiddenAt = 0;
-    if (away < 20 || !St.spaceUsed()) return;
-    if (away < 300) {
-      var g = St.rate() * away * .5 * (1 + .2 * St.book('night'));
+    if (St.isClosed()) return;            /* بسته بوده؛ موقع باز کردن حساب می‌شود */
+    if (away < 25 || !St.spaceUsed()) return;
+    var hours = clamp(away / 3600, 0, E.openOfflineCap);
+    if (away < 240) {
+      var g = St.rate() * away * E.openOfflineRate;
       S().money += g; S().total += g;
       U.toast('در نبودت ' + money(g) + ' تومان جمع شد.', 'good');
       afterChange();
     } else if (!anyModal()) {
-      runShift(away / 3600, false);
+      runShift(hours, false);
     }
   }
 
-  /* ═════════ راه‌اندازی ═════════ */
+  /* ═════════ اتصال ورودی‌ها ═════════ */
   function bindInputs() {
     $('serveBtn').addEventListener('click', function () { serve(false); });
     $('tapZone').addEventListener('pointerdown', function (e) {
+      if (St.isClosed()) return;
       var w = Sc.toWorld(e.clientX, e.clientY);
+      if (tapGift(w.x, w.y)) return;   /* کادو بر سرو مقدم است */
       serve(true, w.x, w.y);
     });
     window.addEventListener('keydown', function (e) {
@@ -447,8 +666,8 @@
       if (e.code === 'Escape') UI.closeSheet();
     });
 
-    $('shiftBtn').addEventListener('click', openShift);
-    $('shiftGo').addEventListener('click', confirmShift);
+    $('shiftBtn').addEventListener('click', openShiftPlan);
+    $('shiftGo').addEventListener('click', closeShop);
     $('shiftCancel').addEventListener('click', function () { $('shiftVeil').hidden = true; });
 
     $('sndBtn').addEventListener('click', function () {
@@ -463,8 +682,22 @@
 
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('pagehide', St.save);
-    window.addEventListener('resize', Sc.resize);
-    if (window.ResizeObserver) new ResizeObserver(Sc.resize).observe($('device'));
+
+    /* نوار آدرس موبایل هنگام باز و بسته شدن، ده‌ها رویداد resize
+       می‌فرستد. بدون این مهار، هر رویداد چند مگابایت بوم تازه
+       می‌ساخت و گوشی را می‌خواباند. */
+    var resizePending = false;
+    function askResize() {
+      if (resizePending) return;
+      resizePending = true;
+      requestAnimationFrame(function () {
+        resizePending = false;
+        Sc.resize();
+      });
+    }
+    window.addEventListener('resize', askResize);
+    window.addEventListener('orientationchange', function () { setTimeout(askResize, 250); });
+    if (window.ResizeObserver) new ResizeObserver(askResize).observe($('device'));
     document.addEventListener('pointerdown', function once() {
       AU.resume();
       if (M().sound) AU.startMusic();
@@ -472,59 +705,84 @@
     });
   }
 
-  function start() {
-    Sc.init($('stage'));
-    UI.init();
-    bindInputs();
-    buildShiftOptions();
+  /* ═════════ راه‌اندازی ═════════ */
+  var hadOld = false, freshPlayer = true, awaySec = 0;
 
-    var had = St.load();
-    Sc.setQuality(M().gfx == null ? 2 : M().gfx);
-    if (!M().sound) AU.setOn(false);
-    $('sndBtn').classList.toggle('on', !!M().sound);
-    disp = S().money;
-    Sc.setTier(S().tier);
-    Sc.snapCamera();
-    UI.syncHUD(disp, 0);
-    UI.setGoal(null);
+  function stageLoad() {
+    var steps = Sc.initSteps($('stage')).slice();
+    steps.push({
+      label: 'باز کردن دفترچه', fn: function () {
+        hadOld = St.hadOldSave();
+        var had = St.load();
+        if (!had && hadOld) St.dropOldSaves();
+        Sc.setQuality(M().gfx == null ? 2 : M().gfx);
+        if (!M().sound) AU.setOn(false);
+        disp = S().money;
+        Sc.setTier(S().tier);
+        Sc.snapCamera();
+        awaySec = had ? clamp((Date.now() - (S().ts || Date.now())) / 1000, 0, 24 * 3600) : 0;
+        freshPlayer = !M().seenIntro;
+      }
+    });
+    steps.push({
+      label: 'روشن کردن چراغ‌ها', fn: function () {
+        UI.init();
+        bindInputs();
+        buildShiftOptions();
+        $('sndBtn').classList.toggle('on', !!M().sound);
+        UI.syncHUD(disp, 0);
+        UI.setGoal(null);
+      }
+    });
+    return steps;
+  }
 
-    var away = had ? clamp((Date.now() - (S().ts || Date.now())) / 1000, 0, 14 * 3600) : 0;
+  function afterLoad() {
+    booted = true;
+    if (hadOld) U.toast('نسخه‌ی تازه، اقتصاد تازه. بازی از اول شروع می‌شود.');
 
-    /* نمای فرود همان لحظه تصمیم گرفته می‌شود، نه با تایمر */
-    var freshPlayer = !M().seenIntro;
     if (freshPlayer) {
-      $('intro').hidden = false;
+      var el = $('intro');
+      el.hidden = false;
+      el.removeAttribute('hidden');
       $('introGo').onclick = function () {
-        $('intro').hidden = true;
+        el.hidden = true;
+        el.setAttribute('hidden', '');
         M().seenIntro = 1;
         St.save();
         AU.resume();
         if (M().sound) AU.startMusic();
         maybeCoach(1);
       };
+    } else if (St.isClosed()) {
+      U.toast('مغازه بسته است. برای باز کردن، دکمه‌ی پایین را بزن.');
+    } else if (awaySec > 240 && St.spaceUsed()) {
+      runShift(clamp(awaySec / 3600, 0, E.openOfflineCap), false);
+    } else {
+      U.toast('برگشتی. مغازه باز است.');
     }
+  }
 
-    setTimeout(function () { $('boot').classList.add('gone'); booted = true; }, U.reduceMotion ? 200 : 1500);
-
-    if (!freshPlayer) {
-      setTimeout(function () {
-        if (away > 120 && St.spaceUsed()) runShift(away / 3600, false);
-        else U.toast('برگشتی. مغازه باز است.');
-      }, U.reduceMotion ? 300 : 1800);
-    }
-
+  function start() {
+    A.loader.begin();
+    A.loader.run(stageLoad(), function () {
+      afterLoad();
+    });
     requestAnimationFrame(loop);
   }
 
   A.game = {
     start: start,
-    buyStation: buyStation, hire: hire, assignCrew: assignCrew,
+    buyStation: buyStation, hire: hire, assignCrew: assignCrew, autoCrew: autoCrew,
     upgradeTier: upgradeTier, buyBook: buyBook, prestige: prestige, hardReset: hardReset,
     serve: serve, claimGoal: claimGoal, fireEvent: fireEvent, runShift: runShift,
-    openShift: openShift, triggerEnding: triggerEnding,
-    /* برای تست */
+    openShiftPlan: openShiftPlan, closeShop: closeShop, openShop: openShop,
+    triggerEnding: triggerEnding,
+    buyGemPack: buyGemPack, buyItem: buyItem, watchAdForGems: watchAdForGems,
+    tapGift: tapGift, claimGift: claimGift, claimGiftTripled: claimGiftTripled,
     debug: {
       grant: function (v) { S().money += v; S().total += v; disp = S().money; afterChange(); },
+      gems: function (v) { St.addGems(v); afterChange(); },
       setTier: function (i) {
         S().tier = clamp(i | 0, 0, D.TIERS.length - 1);
         Sc.reset(); Sc.setTier(S().tier); Sc.snapCamera(); afterChange();
@@ -532,6 +790,7 @@
       state: function () { return S(); }, meta: function () { return M(); },
       heat: function (v) { heat = v; },
       goal: function () { newGoal(); return goal; },
+      close: function (minutesAgo) { S().closedAt = Date.now() - (minutesAgo || 0) * 60000; afterChange(); },
       booted: function () { return booted; }
     }
   };

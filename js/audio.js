@@ -149,6 +149,9 @@
     setOn: function (v) { if (v !== on) A.audio.toggle(); },
     startMusic: startMusic,
     stopMusic: stopMusic,
-    resume: function () { ac(); }
+    resume: function () { ac(); },
+    suspend: function () {
+      if (ctx && ctx.state === 'running') { try { ctx.suspend(); } catch (e) { } }
+    }
   };
 })(window.ABRO);

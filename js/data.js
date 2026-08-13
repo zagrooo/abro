@@ -1,26 +1,30 @@
 /* ═══════════════════════════════════════════════
-   آبرو — محتوا: پرده‌ها، ایستگاه‌ها، رویدادها، آدم‌ها
+   آبرو — محتوا و اعداد بالانس
+
+   منطق اقتصاد (v2):
+   ─ هر ایستگاه در پرده‌ای که باز می‌شود، حدود ۶۵ ثانیه طول می‌کشد
+     تا هزینه‌اش را دربیاورد. این عدد در همه‌ی پرده‌ها ثابت است.
+   ─ هزینه‌ی هر پرده = نرخ کامل آن پرده × k ثانیه × ۰٫۷
+     k از ۱۸۰۰ (نیم ساعت) تا ۱۰۰۰۰ (سه ساعت) بالا می‌رود.
+   ─ ارتقای پرده جز پول، حداقل تعداد سطح هم می‌خواهد تا با
+     یک رویداد خوش‌شانس نشود پرده پرید.
    ═══════════════════════════════════════════════ */
 (function (A) {
   'use strict';
 
-  /* ───────────────────────────────────────────
-     ۱۲ پرده
-     cam  : قاب دوربین (عرض/ارتفاع/مرکز عمودی)
-     fac  : ساختار نما برای موتور تصویر
-     ─────────────────────────────────────────── */
+  /* ───────── ۱۲ پرده ───────── */
   var TIERS = [
     {
-      name: 'چرخ پدر', place: 'خیابان', space: 6, mult: 1,
-      next: 'اجاره‌ی دکه', cost: 5.5e5,
+      name: 'چرخ پدر', place: 'خیابان', space: 8, mult: 1,
+      next: 'اجاره‌ی دکه', cost: 8e4, req: 6,
       nextMeta: 'جای ثابت یعنی فضای بیشتر و مشتری همیشگی.',
       intro: 'چرخ را از گوشه‌ی حیاط هل دادی سر خیابان. دفترچه توی جیبت است.',
       cam: { w: 400, h: 300, y: 362 },
       fac: { style: 'cart', w: 160, top: 352, sign: 'آبرو', signH: 20, awning: ['#a63d33', '#efe3cf'] }
     },
     {
-      name: 'دکه‌ی سرِ کوچه', place: 'کوچه', space: 13, mult: 2.8,
-      next: 'اجاره‌ی مغازه', cost: 7.5e6,
+      name: 'دکه‌ی سرِ کوچه', place: 'کوچه', space: 12, mult: 1.7,
+      next: 'اجاره‌ی مغازه', cost: 1.4e6, req: 9,
       nextMeta: 'چهاردیواری، ویترین، و یک رقیب که روبه‌رو باز می‌کند.',
       intro: 'جای ثابت پیدا کردی. حالا همسایه داری و همسایه حافظه دارد.',
       cam: { w: 470, h: 320, y: 352 },
@@ -30,8 +34,8 @@
       }
     },
     {
-      name: 'مغازه', place: 'بازار', space: 26, mult: 8,
-      next: 'تبدیل به رستوران', cost: 1e8,
+      name: 'مغازه', place: 'بازار', space: 17, mult: 2.9,
+      next: 'تبدیل به رستوران', cost: 2.5e7, req: 12,
       nextMeta: 'میز و صندلی. از این‌جا به بعد اسم می‌فروشی، نه فقط غذا.',
       intro: 'چهاردیواری خودت. روبه‌رو یکی دارد تابلو می‌زند و به تو نگاه نمی‌کند.',
       cam: { w: 540, h: 330, y: 338 },
@@ -41,8 +45,8 @@
       }
     },
     {
-      name: 'رستوران', place: 'نام', space: 52, mult: 24,
-      next: 'باز کردن شعبه‌ی دوم', cost: 2.4e9,
+      name: 'رستوران', place: 'نام', space: 23, mult: 4.9,
+      next: 'باز کردن شعبه‌ی دوم', cost: 4.2e8, req: 16,
       nextMeta: 'شعبه یعنی جایی هست که خودت آن‌جا نیستی.',
       intro: 'حالا اسم می‌فروشی. تلفن هم شروع می‌کند به زنگ زدن.',
       cam: { w: 620, h: 350, y: 326 },
@@ -52,8 +56,8 @@
       }
     },
     {
-      name: 'شعبه‌ی دوم', place: 'دو تابلو', space: 104, mult: 70,
-      next: 'زنجیره‌ی شهر', cost: 4.5e10,
+      name: 'شعبه‌ی دوم', place: 'دو تابلو', space: 30, mult: 8.3,
+      next: 'زنجیره‌ی شهر', cost: 6.5e9, req: 21,
       nextMeta: 'سه تابلو با یک اسم. دیگر کسی صاحبش را نمی‌شناسد.',
       intro: 'کلید دومی را به کسی دادی که خودت بزرگش کردی. شب‌ها آن‌جا چه می‌گذرد؟',
       cam: { w: 660, h: 360, y: 328 },
@@ -63,8 +67,8 @@
       }
     },
     {
-      name: 'زنجیره‌ی شهر', place: 'شهر', space: 190, mult: 210,
-      next: 'آشپزخانه‌ی مرکزی', cost: 9e11,
+      name: 'زنجیره‌ی شهر', place: 'شهر', space: 38, mult: 14,
+      next: 'آشپزخانه‌ی مرکزی', cost: 1.05e11, req: 27,
       nextMeta: 'همه‌جا یک مزه. این خوب است یا بد؟',
       intro: 'سه تابلو. اولین مشتری‌ات دیگر نمی‌آید و تو تازه شش ماه بعد می‌فهمی.',
       cam: { w: 720, h: 370, y: 322 },
@@ -74,8 +78,8 @@
       }
     },
     {
-      name: 'آشپزخانه‌ی مرکزی', place: 'پشت شهر', space: 320, mult: 640,
-      next: 'فرنچایز', cost: 2e13,
+      name: 'آشپزخانه‌ی مرکزی', place: 'پشت شهر', space: 48, mult: 24,
+      next: 'فرنچایز', cost: 1.7e12, req: 34,
       nextMeta: 'اسمت را می‌فروشی به کسی که هرگز ندیدی.',
       intro: 'همه‌چیز یک‌جا پخته می‌شود و بسته‌بندی می‌رود. دیگر بوی هیچ‌جا بلند نمی‌شود.',
       cam: { w: 760, h: 370, y: 326 },
@@ -85,8 +89,8 @@
       }
     },
     {
-      name: 'فرنچایز', place: 'فروش نام', space: 520, mult: 2000,
-      next: 'برند ملی', cost: 5e14,
+      name: 'فرنچایز', place: 'فروش نام', space: 60, mult: 41,
+      next: 'برند ملی', cost: 2.6e13, req: 42,
       nextMeta: 'تبلیغ تلویزیونی. دیگر غذا نمی‌فروشی، خاطره می‌فروشی.',
       intro: 'حالا هر کسی با پول کافی می‌تواند اسم پدرت را بالای در بزند.',
       cam: { w: 800, h: 380, y: 316 },
@@ -96,8 +100,8 @@
       }
     },
     {
-      name: 'برند ملی', place: 'تلویزیون', space: 800, mult: 6300,
-      next: 'کارخانه', cost: 1.4e16,
+      name: 'برند ملی', place: 'تلویزیون', space: 74, mult: 69,
+      next: 'کارخانه', cost: 4e14, req: 52,
       nextMeta: 'خط تولید. کیفیت می‌شود یک عدد در برگه.',
       intro: 'صدای تو از تلویزیون می‌آید و شبیه صدای خودت نیست.',
       cam: { w: 720, h: 420, y: 292 },
@@ -107,8 +111,8 @@
       }
     },
     {
-      name: 'کارخانه', place: 'خط تولید', space: 1200, mult: 20000,
-      next: 'صادرات', cost: 4e17,
+      name: 'کارخانه', place: 'خط تولید', space: 92, mult: 118,
+      next: 'صادرات', cost: 4.6e15, req: 64,
       nextMeta: 'بیرون از مرز، کسی نمی‌داند این غذا از کجا آمده.',
       intro: 'دستور پدرت حالا یک فایل است روی سرور. کسی بازش نمی‌کند.',
       cam: { w: 860, h: 400, y: 318 },
@@ -118,8 +122,8 @@
       }
     },
     {
-      name: 'صادرات', place: 'بندر', space: 1800, mult: 65000,
-      next: 'هلدینگ', cost: 1.2e19,
+      name: 'صادرات', place: 'بندر', space: 114, mult: 200,
+      next: 'هلدینگ', cost: 7.2e16, req: 80,
       nextMeta: 'آخرین پله. بعدش دیگر بالایی نیست.',
       intro: 'کانتینرها می‌روند. روی هرکدام اسمی نوشته که یک‌بار اسم یک آدم بود.',
       cam: { w: 880, h: 400, y: 314 },
@@ -129,8 +133,8 @@
       }
     },
     {
-      name: 'هلدینگ آبرو', place: 'برج', space: 2600, mult: 210000,
-      next: null, cost: 0, nextMeta: '',
+      name: 'هلدینگ آبرو', place: 'برج', space: 142, mult: 340,
+      next: null, cost: 0, req: 0, nextMeta: '',
       intro: 'از پنجره‌ی طبقه‌ی آخر، خیابانی که از آن آمدی حتی دیده نمی‌شود.',
       cam: { w: 780, h: 470, y: 268 },
       fac: {
@@ -140,33 +144,46 @@
     }
   ];
 
-  /* ───────────── ۱۰ ایستگاه ───────────── */
+  /* ───────── ۱۲ ایستگاه ─────────
+     هر ایستگاه ≈ ۵٫۷ برابر قبلی بازده و ≈ ۹ برابر هزینه دارد.
+     بازگشت سرمایه در پرده‌ی باز شدن: ~۶۵ ثانیه برای همه.        */
   var STATIONS = [
-    { id: 'stove', name: 'اجاق', tier: 0, rate: 1.4, cost: 1200, desc: 'قلب کار. هرچه بیشتر، سریع‌تر.', icon: '<path d="M6 20h12M8 20V9a4 4 0 0 1 8 0v11M10 5c0-1 1-1.6 1-2.6.8.8 2 1.6 2 3"/>' },
-    { id: 'counter', name: 'پیشخوان', tier: 0, rate: 5, cost: 11e3, desc: 'جایی که پول رد و بدل می‌شود.', icon: '<path d="M3 10h18M4 10l1 10h14l1-10M8 10V6h8v4"/>' },
-    { id: 'peyk', name: 'پیک', tier: 1, rate: 19, cost: 95e3, desc: 'غذا می‌رود سراغ مشتری.', icon: '<circle cx="5" cy="15" r="2.6"/><circle cx="19" cy="15" r="2.6"/><path d="M7.5 14.5h9l-2-6h-3M14 5h3"/>' },
-    { id: 'kitchen', name: 'آشپزخانه‌ی پشتی', tier: 2, rate: 80, cost: 9e5, desc: 'کار پشت صحنه، بدون سر و صدا.', icon: '<path d="M4 4v16M4 12h6M10 4v16M14 20V9a3 3 0 0 1 6 0v11"/>' },
-    { id: 'brand', name: 'آوازه', tier: 3, rate: 340, cost: 1.1e7, desc: 'تابلو روشن می‌شود، اسم می‌چرخد.', icon: '<path d="M4 12l4-7 4 3 4-5 4 9v5H4z"/>' },
-    { id: 'storage', name: 'انبار', tier: 4, rate: 1500, cost: 1.4e8, desc: 'جنس هیچ‌وقت تمام نمی‌شود.', icon: '<path d="M3 8l9-5 9 5v13H3z"/><path d="M8 21v-8h8v8"/>' },
-    { id: 'packing', name: 'خط بسته‌بندی', tier: 5, rate: 7000, cost: 1.9e9, desc: 'همه‌چیز یک‌شکل، یک‌اندازه.', icon: '<path d="M3 9h18v11H3z"/><path d="M3 9l3-5h12l3 5M12 4v16"/>' },
-    { id: 'fleet', name: 'ناوگان', tier: 6, rate: 34e3, cost: 2.6e10, desc: 'ماشین‌های سفید با یک اسم.', icon: '<path d="M2 16V9h11v7M13 11h4l3 3v2h-7"/><circle cx="6" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/>' },
-    { id: 'academy', name: 'آموزشگاه', tier: 8, rate: 170e3, cost: 3.8e11, desc: 'به بقیه یاد می‌دهی چطور شبیه تو بپزند.', icon: '<path d="M12 4L2 9l10 5 10-5z"/><path d="M6 11.5V17c0 1.5 3 3 6 3s6-1.5 6-3v-5.5"/>' },
-    { id: 'office', name: 'دفتر مرکزی', tier: 10, rate: 900e3, cost: 5.5e12, desc: 'اتاقی که هیچ اجاقی توی آن نیست.', icon: '<path d="M4 21V4h10v17M14 9h6v12"/><path d="M7 8h4M7 12h4M7 16h4M17 13h1M17 17h1"/>' }
+    { id: 'stove', name: 'اجاق', tier: 0, rate: 1.5, cost: 90, desc: 'قلب کار. هرچه بیشتر، سریع‌تر.', icon: '<path d="M6 20h12M8 20V9a4 4 0 0 1 8 0v11M10 5c0-1 1-1.6 1-2.6.8.8 2 1.6 2 3"/>' },
+    { id: 'counter', name: 'پیشخوان', tier: 0, rate: 8, cost: 500, desc: 'جایی که پول رد و بدل می‌شود.', icon: '<path d="M3 10h18M4 10l1 10h14l1-10M8 10V6h8v4"/>' },
+    { id: 'peyk', name: 'پیک', tier: 1, rate: 42, cost: 4.5e3, desc: 'غذا می‌رود سراغ مشتری.', icon: '<circle cx="5" cy="15" r="2.6"/><circle cx="19" cy="15" r="2.6"/><path d="M7.5 14.5h9l-2-6h-3M14 5h3"/>' },
+    { id: 'kitchen', name: 'آشپزخانه‌ی پشتی', tier: 2, rate: 230, cost: 42e3, desc: 'کار پشت صحنه، بدون سر و صدا.', icon: '<path d="M4 4v16M4 12h6M10 4v16M14 20V9a3 3 0 0 1 6 0v11"/>' },
+    { id: 'brand', name: 'آوازه', tier: 3, rate: 1.3e3, cost: 4e5, desc: 'تابلو روشن می‌شود، اسم می‌چرخد.', icon: '<path d="M4 12l4-7 4 3 4-5 4 9v5H4z"/>' },
+    { id: 'storage', name: 'انبار', tier: 4, rate: 7e3, cost: 3.9e6, desc: 'جنس هیچ‌وقت تمام نمی‌شود.', icon: '<path d="M3 8l9-5 9 5v13H3z"/><path d="M8 21v-8h8v8"/>' },
+    { id: 'packing', name: 'خط بسته‌بندی', tier: 5, rate: 40e3, cost: 3.6e7, desc: 'همه‌چیز یک‌شکل، یک‌اندازه.', icon: '<path d="M3 9h18v11H3z"/><path d="M3 9l3-5h12l3 5M12 4v16"/>' },
+    { id: 'fleet', name: 'ناوگان', tier: 6, rate: 2.3e5, cost: 3.5e8, desc: 'ماشین‌های سفید با یک اسم.', icon: '<path d="M2 16V9h11v7M13 11h4l3 3v2h-7"/><circle cx="6" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/>' },
+    { id: 'catering', name: 'تشریفات', tier: 7, rate: 1.3e6, cost: 3.5e9, desc: 'مجالس. سیصد پرس با یک تلفن.', icon: '<path d="M4 18h16M6 18a6 6 0 0 1 12 0M12 12V9M9 5h6"/>' },
+    { id: 'academy', name: 'آموزشگاه', tier: 8, rate: 7.5e6, cost: 3.5e10, desc: 'به بقیه یاد می‌دهی چطور شبیه تو بپزند.', icon: '<path d="M12 4L2 9l10 5 10-5z"/><path d="M6 11.5V17c0 1.5 3 3 6 3s6-1.5 6-3v-5.5"/>' },
+    { id: 'franchise', name: 'حق امتیاز', tier: 9, rate: 4.2e7, cost: 3.4e11, desc: 'پول می‌آید بدون اینکه چیزی بپزی.', icon: '<path d="M4 21V8h16v13z"/><path d="M9 8V5a3 3 0 0 1 6 0v3M12 12v5M9.5 14h5"/>' },
+    { id: 'office', name: 'دفتر مرکزی', tier: 10, rate: 2.4e8, cost: 3.4e12, desc: 'اتاقی که هیچ اجاقی توی آن نیست.', icon: '<path d="M4 21V4h10v17M14 9h6v12"/><path d="M7 8h4M7 12h4M7 16h4M17 13h1M17 17h1"/>' }
   ];
 
-  /* ───────────── مواد و ریسک ───────────── */
+  /* رشد قیمت هر سطح.
+     عمداً ملایم است تا «فضا» محدودکننده باشد نه پول — همان چیزی که
+     کل طراحی روی آن بنا شده. با ۱٫۱۵ فضا هیچ‌وقت پر نمی‌شد. */
+  var COST_GROWTH = 1.055;
+
+  /* ───────── مواد و ریسک ───────── */
+  /* `integ` ضربه‌ی یک‌باره‌ی پایان شب است.
+     `target` جایی است که اصالت با ادامه دادنِ همین مواد ته می‌نشیند.
+     قبلاً به‌جای هدف، شیب داشت و «معمولی» هم در یک ساعت اصالت را
+     به صفر می‌رساند — بازیکن بدون هیچ اشتباهی ۳۲٪ درآمد از دست می‌داد. */
   var ING = {
-    cheap: { out: 1.35, cost: .17, integ: -6, label: 'ارزان', note: 'سریع‌تر، ولی مشتری قدیمی می‌فهمد' },
-    normal: { out: 1, cost: .25, integ: -1, label: 'معمولی', note: 'همان همیشگی' },
-    premium: { out: .86, cost: .36, integ: 5, label: 'ممتاز', note: 'کمتر می‌فروشی، بیشتر می‌مانند' }
+    cheap: { out: 1.3, cost: .17, integ: -6, target: 22, label: 'ارزان', note: 'سریع‌تر، ولی مشتری قدیمی می‌فهمد' },
+    normal: { out: 1, cost: .25, integ: -1, target: 62, label: 'معمولی', note: 'همان همیشگی' },
+    premium: { out: .87, cost: .34, integ: 5, target: 93, label: 'ممتاز', note: 'کمتر می‌فروشی، بیشتر می‌مانند' }
   };
   var RISK = {
-    safe: { lo: .88, hi: .98, label: 'محتاط', note: 'کم و مطمئن' },
-    mid: { lo: .92, hi: 1.16, label: 'معمولی', note: 'مثل هر شب' },
-    bold: { lo: .55, hi: 1.85, label: 'جسور', note: 'یا می‌ترکانی یا مواد روی دستت می‌ماند' }
+    safe: { lo: .9, hi: 1.0, label: 'محتاط', note: 'کم و مطمئن' },
+    mid: { lo: .92, hi: 1.14, label: 'معمولی', note: 'مثل هر شب' },
+    bold: { lo: .62, hi: 1.6, label: 'جسور', note: 'یا می‌ترکانی یا مواد روی دستت می‌ماند' }
   };
 
-  /* ───────────── آدم‌ها ───────────── */
+  /* ───────── آدم‌ها ───────── */
   var PEOPLE = [
     {
       id: 'nane', name: 'ننه‌ی همسایه', role: 'اولین مشتری', start: 60,
@@ -190,7 +207,8 @@
     }
   ];
 
-  /* ───────────── رویدادها ───────────── */
+  /* ───────── رویدادها ─────────
+     m ضریبی است روی «۲۴۰ ثانیه درآمد»، نه ۹۰۰ ثانیه‌ی قبل.   */
   var EVENTS = [
     {
       k: 'سر شب', t: 'بازرس آمد', art: 'inspector', who: 'bazres', minTier: 0,
@@ -225,7 +243,7 @@
     {
       k: 'پیشنهاد', t: 'سرمایه‌گذار زنگ زد', art: 'suit', minTier: 2,
       x: 'تهدید نمی‌کند. فقط می‌گوید با پول او سه برابر می‌شوی — اگر دستور را استاندارد کنی.',
-      a: { b: 'بشنو', s: 'پول می‌آید. یک چیزی هم می‌رود.', m: 1.6, i: -14 },
+      a: { b: 'بشنو', s: 'پول می‌آید. یک چیزی هم می‌رود.', m: 1.5, i: -14 },
       c: { b: 'فعلاً نه', s: 'همان‌طور می‌مانی که بودی.', m: 0, i: 6 }
     },
     {
@@ -291,7 +309,7 @@
     {
       k: 'رشد', t: 'مواد ارزان‌تر پیدا شد', art: 'suit', minTier: 6,
       x: 'همان مزه، نصف قیمت. آزمایشگاه می‌گوید فرقی ندارد. زبان تو می‌گوید دارد.',
-      a: { b: 'عوض کن', s: 'حاشیه‌ی سود می‌پرد بالا.', m: 1.1, i: -15 },
+      a: { b: 'عوض کن', s: 'حاشیه‌ی سود می‌پرد بالا.', m: 1.05, i: -15 },
       c: { b: 'به زبانت اعتماد کن', s: 'گران‌تر، ولی همان.', m: -.1, i: 10 }
     },
     {
@@ -303,7 +321,7 @@
     {
       k: 'پیشنهاد', t: 'صندوق سرمایه‌گذاری', art: 'suit', minTier: 8,
       x: 'می‌خواهند چهل درصد. در ازایش، اسمت می‌رود روی هر تابلوی این کشور.',
-      a: { b: 'امضا کن', s: 'دیگر خودت تصمیم آخر را نمی‌گیری.', m: 2.4, i: -20 },
+      a: { b: 'امضا کن', s: 'دیگر خودت تصمیم آخر را نمی‌گیری.', m: 2, i: -20 },
       c: { b: 'امضا نکن', s: 'کندتر. ولی مال خودت.', m: 0, i: 12 }
     },
     {
@@ -314,59 +332,110 @@
     }
   ];
 
-  /* ───────────── سفارش‌های ویژه ───────────── */
+  /* ───────── سفارش‌های ویژه ───────── */
   var GOALS = [
     { type: 'serve', n: [14, 26], t: 110, txt: function (n) { return 'تا دو دقیقه ' + A.util.fa(n) + ' مشتری سرو کن'; } },
     { type: 'serve', n: [30, 46], t: 150, txt: function (n) { return 'سفارش عمده: ' + A.util.fa(n) + ' پرس'; } },
-    { type: 'earn', n: [26, 44], t: 120, txt: function (n, need) { return 'تا دو دقیقه ' + A.util.money(need) + ' تومان جمع کن'; } },
-    { type: 'earn', n: [50, 80], t: 170, txt: function (n, need) { return 'قسط این ماه: ' + A.util.money(need) + ' تومان'; } }
+    { type: 'earn', n: [40, 70], t: 120, txt: function (n, need) { return 'تا دو دقیقه ' + A.util.money(need) + ' تومان جمع کن'; } },
+    { type: 'earn', n: [90, 140], t: 180, txt: function (n, need) { return 'قسط این ماه: ' + A.util.money(need) + ' تومان'; } }
   ];
 
-  /* ───────────── دفترچه‌ی پدر (ارتقای دائمی با آبرو) ───────────── */
+  /* ───────── دفترچه‌ی پدر ───────── */
   var BOOK = [
     {
-      id: 'recipe', name: 'دستور اصلی', max: 6, cost: function (l) { return 3 + l * 3; },
+      id: 'recipe', name: 'دستور اصلی', max: 10,
+      cost: function (l) { return Math.round(5 * Math.pow(2.1, l)); },
       desc: function (l) { return 'درآمد همه‌ی ایستگاه‌ها +' + A.util.fa(25 * (l + 1)) + '٪'; },
       icon: '<path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M8 8h7M8 12h7"/>'
     },
     {
-      id: 'hands', name: 'دستِ گرم', max: 6, cost: function (l) { return 2 + l * 2; },
-      desc: function (l) { return 'ارزش هر سرو +' + A.util.fa(50 * (l + 1)) + '٪'; },
+      id: 'hands', name: 'دستِ گرم', max: 8,
+      cost: function (l) { return Math.round(4 * Math.pow(2.0, l)); },
+      desc: function (l) { return 'ارزش هر سرو +' + A.util.fa(35 * (l + 1)) + '٪'; },
       icon: '<path d="M8 13V5a1.6 1.6 0 0 1 3.2 0v6M11.2 11V4a1.6 1.6 0 0 1 3.2 0v7M14.4 11.5V6a1.6 1.6 0 0 1 3.2 0v8a6 6 0 0 1-6 6h-1a5 5 0 0 1-5-5v-2a1.6 1.6 0 0 1 3.2 0"/>'
     },
     {
-      id: 'honest', name: 'امانت', max: 4, cost: function (l) { return 4 + l * 4; },
-      desc: function (l) { return 'افت اصالت ' + A.util.fa(20 * (l + 1)) + '٪ کمتر'; },
+      id: 'honest', name: 'امانت', max: 6,
+      cost: function (l) { return Math.round(8 * Math.pow(2.2, l)); },
+      desc: function (l) { return 'افت اصالت ' + A.util.fa(Math.min(90, 15 * (l + 1))) + '٪ کمتر'; },
       icon: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
     },
     {
-      id: 'seed', name: 'سرمایه‌ی اولیه', max: 6, cost: function (l) { return 3 + l * 3; },
-      desc: function (l) { return 'هر دور با ' + A.util.money(5e4 * Math.pow(9, l)) + ' تومان شروع کن'; },
+      id: 'seed', name: 'سرمایه‌ی اولیه', max: 8,
+      cost: function (l) { return Math.round(6 * Math.pow(2.3, l)); },
+      desc: function (l) { return 'هر دور با ' + A.util.money(4e3 * Math.pow(12, l)) + ' تومان شروع کن'; },
       icon: '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10h5M9.5 14h5"/>'
     },
     {
-      id: 'space', name: 'جای بیشتر', max: 5, cost: function (l) { return 5 + l * 5; },
-      desc: function (l) { return 'فضای هر پرده +' + A.util.fa(12 * (l + 1)) + '٪'; },
+      id: 'space', name: 'جای بیشتر', max: 8,
+      cost: function (l) { return Math.round(10 * Math.pow(2.2, l)); },
+      desc: function (l) { return 'فضای هر پرده +' + A.util.fa(10 * (l + 1)) + '٪'; },
       icon: '<path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>'
     },
     {
-      id: 'haggle', name: 'چانه‌زنی', max: 5, cost: function (l) { return 4 + l * 4; },
-      desc: function (l) { return 'ارتقاها ' + A.util.fa(7 * (l + 1)) + '٪ ارزان‌تر'; },
+      id: 'haggle', name: 'چانه‌زنی', max: 8,
+      cost: function (l) { return Math.round(8 * Math.pow(2.1, l)); },
+      desc: function (l) { return 'ارتقاها ' + A.util.fa(6 * (l + 1)) + '٪ ارزان‌تر'; },
       icon: '<path d="M12 3v18M8 7h6a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h7"/>'
     },
     {
-      id: 'night', name: 'شب‌کار', max: 5, cost: function (l) { return 3 + l * 3; },
-      desc: function (l) { return 'درآمد غیبت +' + A.util.fa(20 * (l + 1)) + '٪'; },
+      id: 'night', name: 'شب‌کار', max: 8,
+      cost: function (l) { return Math.round(6 * Math.pow(2.1, l)); },
+      desc: function (l) { return 'درآمد شبِ بسته +' + A.util.fa(18 * (l + 1)) + '٪'; },
       icon: '<path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/>'
     },
     {
-      id: 'luck', name: 'اقبال', max: 4, cost: function (l) { return 6 + l * 5; },
+      id: 'luck', name: 'اقبال', max: 6,
+      cost: function (l) { return Math.round(12 * Math.pow(2.2, l)); },
       desc: function (l) { return 'نتیجه‌ی پولی رویدادها ' + A.util.fa(15 * (l + 1)) + '٪ بهتر'; },
       icon: '<path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/>'
     }
   ];
 
-  /* ───────────── نشان‌ها ───────────── */
+  /* ───────── فروشگاه ───────── */
+  /* بسته‌های الماس — نمایشی. هیچ درگاه پرداختی وصل نیست. */
+  var GEM_PACKS = [
+    { id: 'p1', gems: 50, price: '۲۹٬۰۰۰ تومان', tag: '' },
+    { id: 'p2', gems: 120, price: '۵۹٬۰۰۰ تومان', tag: '۲۰٪ بیشتر' },
+    { id: 'p3', gems: 320, price: '۱۴۹٬۰۰۰ تومان', tag: 'محبوب' },
+    { id: 'p4', gems: 900, price: '۳۹۹٬۰۰۰ تومان', tag: 'بهترین ارزش' }
+  ];
+
+  /* چیزهایی که با الماس خریده می‌شوند */
+  var SHOP_ITEMS = [
+    {
+      id: 'cash1', name: 'کیسه‌ی پول', gems: 15,
+      desc: 'یک ساعت درآمد فعلی، همین حالا',
+      icon: '<path d="M6 8h12l2 12H4z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>'
+    },
+    {
+      id: 'boost', name: 'شب شلوغ', gems: 25,
+      desc: 'نیم ساعت، درآمد دو برابر',
+      icon: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'
+    },
+    {
+      id: 'crew', name: 'یک نیروی تازه', gems: 12,
+      desc: 'بدون پول، یک نفر اضافه می‌شود',
+      icon: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M18 8v6M15 11h6"/>'
+    },
+    {
+      id: 'abroo', name: 'سه آبرو', gems: 45,
+      desc: 'مستقیم به موجودی آبرو اضافه می‌شود',
+      icon: '<path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/>'
+    },
+    {
+      id: 'space', name: 'جای دائمی', gems: 70,
+      desc: 'پنج جای اضافه در همه‌ی پرده‌ها، برای همیشه',
+      icon: '<path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>'
+    },
+    {
+      id: 'integ', name: 'دلجویی از کوچه', gems: 30,
+      desc: 'اصالت +۲۰ و رابطه با همه بهتر',
+      icon: '<path d="M12 20s-7-4.5-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.5-7 9-7 9z"/>'
+    }
+  ];
+
+  /* ───────── نشان‌ها ───────── */
   var BADGES = [
     { id: 'first', name: 'اولین پرس', d: 'اجاق را روشن کن', r: 1, icon: '<path d="M6 20h12M8 20V9a4 4 0 0 1 8 0v11"/>', test: function (s) { return s.lvl.stove > 0; } },
     { id: 'crew1', name: 'دستِ کمک', d: 'اولین نفر را استخدام کن', r: 1, icon: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/>', test: function (s) { return s.hired > 0; } },
@@ -375,18 +444,20 @@
     { id: 'shop', name: 'چهاردیواری', d: 'به مغازه برس', r: 3, icon: '<path d="M3 21V10l9-6 9 6v11"/>', test: function (s) { return s.tier >= 2; } },
     { id: 'rest', name: 'میز و صندلی', d: 'به رستوران برس', r: 5, icon: '<path d="M4 4v16M4 12h6M10 4v16M14 20V9a3 3 0 0 1 6 0v11"/>', test: function (s) { return s.tier >= 3; } },
     { id: 'chain', name: 'سه تابلو', d: 'زنجیره بساز', r: 10, icon: '<path d="M4 21V9h5v12M10 21V6h5v15M16 21v-9h4v9"/>', test: function (s) { return s.tier >= 5; } },
-    { id: 'plant', name: 'خط تولید', d: 'کارخانه بزن', r: 20, icon: '<path d="M3 21V11l5 3V11l5 3V8l8 4v9z"/>', test: function (s) { return s.tier >= 9; } },
-    { id: 'top', name: 'طبقه‌ی آخر', d: 'به هلدینگ برس', r: 40, icon: '<path d="M12 3l8 5v13H4V8z"/><path d="M12 3v18"/>', test: function (s) { return s.tier >= 11; } },
+    { id: 'plant', name: 'خط تولید', d: 'کارخانه بزن', r: 25, icon: '<path d="M3 21V11l5 3V11l5 3V8l8 4v9z"/>', test: function (s) { return s.tier >= 9; } },
+    { id: 'top', name: 'طبقه‌ی آخر', d: 'به هلدینگ برس', r: 60, icon: '<path d="M12 3l8 5v13H4V8z"/><path d="M12 3v18"/>', test: function (s) { return s.tier >= 11; } },
     { id: 'pure', name: 'دستِ پاک', d: 'اصالت را به ۹۵ برسان', r: 8, icon: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>', test: function (s) { return s.integ >= 95; } },
     { id: 'dirty', name: 'هر کاری لازم بود', d: 'اصالت زیر ۱۰ برود', r: 3, icon: '<path d="M3 6l18 12M21 6L3 18"/>', test: function (s) { return s.integ <= 10; } },
     { id: 'combo', name: 'دستِ داغ', d: 'گرما را پر کن', r: 3, icon: '<path d="M12 22c4-1 6-4 6-8 0-5-6-11-6-11S6 9 6 14c0 4 2 7 6 8z"/>', test: function (s, x) { return x.heat >= .98; } },
-    { id: 'give', name: 'واگذاری', d: 'یک‌بار همه‌چیز را بسپار', r: 5, icon: '<path d="M4 12h16M14 6l6 6-6 6"/>', test: function (s) { return s.runs > 0; } },
+    { id: 'give', name: 'واگذاری', d: 'یک‌بار همه‌چیز را بسپار', r: 5, icon: '<path d="M4 12h16M14 6l6 6-6 6"/>', test: function (s, x) { return x.runs > 0; } },
     { id: 'friends', name: 'کوچه پشتت است', d: 'هر چهار نفر بالای ۷۰', r: 15, icon: '<circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M2 20c0-3 2.7-5 6-5M22 20c0-3-2.7-5-6-5"/>', test: function (s) { return PEOPLE.every(function (p) { return (s.people[p.id] || 0) >= 70; }); } },
     { id: 'serve1k', name: 'هزار پرس', d: '۱۰۰۰ بار سرو کن', r: 6, icon: '<path d="M3 12h18M12 3v18"/>', test: function (s) { return (s.served || 0) >= 1000; } },
-    { id: 'goal10', name: 'همیشه سرِ وقت', d: '۱۰ سفارش ویژه برسان', r: 8, icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', test: function (s) { return (s.goalsDone || 0) >= 10; } }
+    { id: 'goal10', name: 'همیشه سرِ وقت', d: '۱۰ سفارش ویژه برسان', r: 8, icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', test: function (s) { return (s.goalsDone || 0) >= 10; } },
+    { id: 'night10', name: 'ده شب', d: '۱۰ شیفت را ببند', r: 6, icon: '<path d="M3 12h4l3-8 4 16 3-8h4"/>', test: function (s) { return s.day >= 10; } },
+    { id: 'lvl100', name: 'صد سطح', d: 'مجموع سطح ایستگاه‌ها به ۱۰۰ برسد', r: 12, icon: '<path d="M4 20V10M10 20V4M16 20v-8M22 20h-20"/>', test: function (s, x) { return x.levels >= 100; } }
   ];
 
-  /* ───────────── متن‌های شب ───────────── */
+  /* ───────── متن‌های شب ───────── */
   var NIGHT = [
     'شب آرامی بود. همان مشتری‌های همیشگی.',
     'تا نصف شب شلوغ بود، بعد یک‌دفعه خالی شد.',
@@ -402,7 +473,21 @@
     'یکی گفت مزه‌اش عوض شده. گفتی نه.'
   ];
 
-  /* ───────────── پایان‌ها ───────────── */
+  /* ───────── نکته‌های صفحه‌ی بارگذاری ───────── */
+  var TIPS = [
+    'فضا محدود است، نه پول. بزرگ کردن یک شاخه یعنی بزرگ نکردن شاخه‌ی دیگر.',
+    'ایستگاه بدون نیرو فقط ۴۵٪ کار می‌کند.',
+    'وقتی مغازه بسته است، درآمد شب حساب می‌شود. باز که کنی، فاکتورش را می‌بینی.',
+    'اصالت پایین یعنی هر ایستگاه کمتر می‌آورد. ارزان‌خری امروز، فردا گران تمام می‌شود.',
+    'ننه‌ی همسایه اولین مشتری‌ات بود. یادش می‌ماند.',
+    'واگذاری همه‌چیز را صفر می‌کند جز آبرو. آبرو ضریب دور بعد است.',
+    'دفترچه‌ی پدر با آبرو باز می‌شود و هیچ‌وقت پاک نمی‌شود.',
+    'تند بزنی دستت گرم می‌شود و هر سرو بیشتر می‌ارزد.',
+    'مواد ممتاز کمتر می‌فروشد ولی مشتری را نگه می‌دارد.',
+    'هر پرده جز پول، حداقل تعداد سطح هم می‌خواهد.'
+  ];
+
+  /* ───────── پایان‌ها ───────── */
   var ENDINGS = {
     kept: {
       t: 'پایان یکم',
@@ -421,8 +506,29 @@
   };
 
   A.data = {
-    TIERS: TIERS, STATIONS: STATIONS, ING: ING, RISK: RISK,
-    EVENTS: EVENTS, GOALS: GOALS, BOOK: BOOK, BADGES: BADGES,
-    PEOPLE: PEOPLE, NIGHT: NIGHT, ENDINGS: ENDINGS
+    TIERS: TIERS, STATIONS: STATIONS, COST_GROWTH: COST_GROWTH,
+    ING: ING, RISK: RISK, EVENTS: EVENTS, GOALS: GOALS,
+    BOOK: BOOK, BADGES: BADGES, PEOPLE: PEOPLE, NIGHT: NIGHT,
+    TIPS: TIPS, ENDINGS: ENDINGS,
+    GEM_PACKS: GEM_PACKS, SHOP_ITEMS: SHOP_ITEMS,
+
+    /* ثابت‌های اقتصاد — یک‌جا تا تنظیم آسان باشد */
+    ECON: {
+      tapRateShare: .25,      /* هر سرو چند ثانیه درآمد می‌دهد */
+      tapFloor: 12,           /* کف ارزش سرو در پرده‌ی یک */
+      heatMax: 1.0,           /* حداکثر افزایش گرما */
+      eventWindow: 240,       /* رویدادها روی چند ثانیه درآمد حساب می‌شوند */
+      goalWindow: 45,
+      openOfflineRate: .35,   /* مغازه‌ی باز در نبود بازیکن */
+      openOfflineCap: 6,      /* ساعت */
+      closedRate: .62,        /* مغازه‌ی بسته */
+      closedCap: 14,          /* ساعت */
+      adMinMinutes: 10,       /* حداقل زمان لازم برای دکمه‌ی تبلیغ */
+      wageShare: 40,          /* دستمزد هر نفر = این‌قدر ثانیه درآمد در هر هشت ساعت */
+      hireBase: 400,
+      /* هر ۷ سطح یک نفر لازم است، پس در پرده‌های آخر ده‌ها نفر می‌خواهی.
+         رشد تند قیمت این‌جا کل بازی را قفل می‌کرد. */
+      hireGrowth: 1.14
+    }
   };
 })(window.ABRO);

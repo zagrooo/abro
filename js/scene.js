@@ -13,7 +13,18 @@
 
   /* مختصات مجازی صحنه */
   var VW = 960, GY = 430;
-  var BX0 = -380, BY0 = -280, BW = 1720, BH = 1000;
+  var BX0 = -320, BY0 = -260, BW = 1500, BH = 900;
+
+  /* تشخیص دستگاه ضعیف — روی موبایل با کیفیت پایین‌تر شروع می‌کنیم
+     و اگر جا داشت خودش می‌رود بالا. */
+  var lowEnd = (function () {
+    try {
+      var mem = navigator.deviceMemory || 8;
+      var cpu = navigator.hardwareConcurrency || 8;
+      var mobile = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent || '');
+      return mobile || mem <= 4 || cpu <= 4;
+    } catch (e) { return true; }
+  })();
 
   var cv = null, ctx = null;
   var DPR = 1, CW = 0, CH = 0, K = 1, OX = 0, OY = 0;
@@ -23,11 +34,13 @@
   var RM = U.reduceMotion;
 
   /* کیفیت: ۲ کامل، ۱ بدون بلوم/بازتاب، ۰ حداقلی */
-  var quality = RM ? 1 : 2, frameMs = 16, slowFrames = 0, fastFrames = 0;
+  var quality = RM ? 0 : (lowEnd ? 1 : 2), frameMs = 16, slowFrames = 0, fastFrames = 0;
   var supportsFilter = false;
 
   /* چرخه‌ی شب و سحر */
   var CYCLE = 420, cycleT = CYCLE * .12, NF = 1;
+  /* ضریب «مغازه بسته» — همه‌ی نورهای مغازه را خاموش می‌کند */
+  var CF = 1;
 
   /* ───────── دوربین ───────── */
   var cam = { w: 400, h: 300, y: 362 }, camT = { w: 400, h: 300, y: 362 };
@@ -65,7 +78,9 @@
   }
 
   function skylineBand(g, R, baseY, h1, h2, col, winCol, chance, step, blur) {
-    if (blur && supportsFilter) g.filter = 'blur(' + blur + 'px)';
+    /* تاری فقط روی دستگاه‌های قوی — روی موبایل ضعیف همین یک خط
+       می‌تواند چند ثانیه بوم را قفل کند */
+    if (blur && supportsFilter && !lowEnd) g.filter = 'blur(' + blur + 'px)';
     var x = BX0 - 40;
     while (x < BX0 + BW + 40) {
       var w = step[0] + R() * step[1], h = h1 + R() * (h2 - h1), y = baseY - h;
@@ -84,7 +99,9 @@
   }
 
   function buildBackdrop() {
-    var s = 1.5;
+    /* ۱۵۰۰×۹۰۰ = ۵٫۴ مگابایت. با ضریب ۱٫۵ می‌شد ۱۵ مگابایت که روی
+       اندروید ضعیف باعث کشته شدن رندرر می‌شد. */
+    var s = lowEnd ? 1 : 1.25;
     var c = off(Math.round(BW * s), Math.round(BH * s));
     var g = c.getContext('2d');
     g.scale(s, s); g.translate(-BX0, -BY0);
@@ -101,7 +118,7 @@
 
     /* راه شیری کم‌رنگ */
     g.save();
-    if (supportsFilter) g.filter = 'blur(22px)';
+    if (supportsFilter && !lowEnd) g.filter = 'blur(10px)';
     var mw = g.createLinearGradient(BX0, BY0, BX0 + BW, 260);
     mw.addColorStop(0, 'rgba(90,110,160,0)');
     mw.addColorStop(.5, 'rgba(110,130,180,.07)');
@@ -146,7 +163,7 @@
 
     /* ابرهای نازک */
     g.save();
-    if (supportsFilter) g.filter = 'blur(9px)';
+    if (supportsFilter && !lowEnd) g.filter = 'blur(9px)';
     for (var cl = 0; cl < 11; cl++) {
       var cx2 = BX0 + R() * BW, cy2 = BY0 + 60 + R() * 210;
       var cwid = 180 + R() * 260, chei = 18 + R() * 22;
@@ -336,7 +353,9 @@
   }
 
   function litWindow(g, x, y, w, h, warm, T, seed, people) {
-    warm *= (.5 + .5 * NF);
+    warm *= (.5 + .5 * NF) * CF;
+    /* سایه‌ی آدم‌های داخل پنجره گران است — فقط در کیفیت کامل */
+    if (CF < .5 || quality < 2) people = 0;
     var gr = g.createLinearGradient(0, y, 0, y + h);
     gr.addColorStop(0, 'rgba(255,212,150,' + (.88 * warm) + ')');
     gr.addColorStop(.6, 'rgba(255,186,116,' + (.7 * warm) + ')');
@@ -368,7 +387,7 @@
   var NEON = ['rgba(255,138,92,', 'rgba(120,196,255,', 'rgba(255,196,110,'];
   function signBoard(g, cx, y, w, h, text, lit, T, neon) {
     var x = cx - w / 2;
-    lit *= (.35 + .65 * NF);
+    lit *= (.35 + .65 * NF) * CF;
     g.fillStyle = '#131922'; rr(g, x, y, w, h, 4); g.fill();
     g.strokeStyle = '#26303f'; g.lineWidth = 2; g.stroke();
     /* قاب فلزی */
@@ -387,13 +406,19 @@
     g.textAlign = 'center'; g.textBaseline = 'middle';
     var ty = y + h / 2 + 1;
     if (lit > 0) {
-      g.save();
-      g.fillStyle = col;
-      g.shadowColor = neon ? col : 'rgba(255,180,90,.95)';
-      g.shadowBlur = 16 * fl;
-      g.fillText(text, cx, ty);
-      g.fillText(text, cx, ty);
-      g.restore();
+      /* shadowBlur روی موبایل بسیار کند است */
+      if (quality >= 2) {
+        g.save();
+        g.fillStyle = col;
+        g.shadowColor = neon ? col : 'rgba(255,180,90,.95)';
+        g.shadowBlur = 16 * fl;
+        g.fillText(text, cx, ty);
+        g.fillText(text, cx, ty);
+        g.restore();
+      } else {
+        g.fillStyle = col;
+        g.fillText(text, cx, ty);
+      }
       g.fillStyle = 'rgba(255,246,226,' + (.86 * fl) + ')';
       g.fillText(text, cx, ty);
     } else {
@@ -409,7 +434,7 @@
       var t = i / n;
       var mx = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * ((x1 + x2) / 2) + t * t * x2;
       var my = (1 - t) * (1 - t) * y + 2 * (1 - t) * t * (y + 15) + t * t * y;
-      var f = (.56 + Math.sin(T * 2.6 + i * 1.7) * .34) * NF;
+      var f = (.56 + Math.sin(T * 2.6 + i * 1.7) * .34) * NF * CF;
       g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = .34 * f;
       g.drawImage(glowSprite, mx - 18, my - 16, 36, 36); g.restore();
       g.fillStyle = 'rgba(255,218,168,' + (.7 + f * .3) + ')';
@@ -446,7 +471,7 @@
       g.fillStyle = '#333c4a'; rr(g, x + dx - 8, y - 20, 16, 4, 2); g.fill();
       g.fillStyle = '#2b3240'; rr(g, x + dx - 8, y - 32, 3, 13, 1.5); g.fill();
     });
-    var f = (.6 + Math.sin(T * 5 + seed) * .3) * NF;
+    var f = (.6 + Math.sin(T * 5 + seed) * .3) * NF * CF;
     g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = .36 * f;
     g.drawImage(glowSprite, x - 42, y - 70, 84, 84); g.restore();
     g.fillStyle = 'rgba(255,214,150,.9)'; g.beginPath(); g.arc(x, y - 31, 2.2, 0, 6.3); g.fill();
@@ -456,7 +481,7 @@
     var n = Math.max(3, Math.round(w / 70));
     for (var i = 0; i < n; i++) {
       var lx = x + (i + .5) * (w / n);
-      var f = (.7 + Math.sin(T * 3 + i) * .2) * NF;
+      var f = (.7 + Math.sin(T * 3 + i) * .2) * NF * CF;
       g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = .32 * f;
       g.drawImage(glowSprite, lx - 58, y - 24, 116, 116); g.restore();
       g.fillStyle = 'rgba(216,236,255,' + (.55 + f * .35) + ')';
@@ -465,7 +490,7 @@
   }
   function rollerDoor(g, x, y, w, h, open, T) {
     g.fillStyle = '#161c26'; g.fillRect(x - 3, y - 4, w + 6, 5);
-    if (open) {
+    if (open && CF > .5) {
       var gr = g.createLinearGradient(0, y, 0, y + h);
       gr.addColorStop(0, 'rgba(255,200,124,' + (.58 * NF) + ')');
       gr.addColorStop(1, 'rgba(255,162,82,' + (.26 * NF) + ')');
@@ -618,7 +643,7 @@
         anchors.owner = [cx + 30, ct + 2];
         anchors.crew = [x - 16, x + cw + 16];
         anchors.queue = x + cw + 30;
-        potFire(g, anchors.pot[0], anchors.pot[1], T, W.lvl.stove > 0);
+        potFire(g, anchors.pot[0], anchors.pot[1], T, W.lvl.stove > 0 && CF > .5);
         signBoard(g, cx - 4, 292, 120, fac.signH, fac.sign, lit ? 1 : .25, T);
         break;
       }
@@ -636,7 +661,7 @@
         anchors.pot = [cx - 60, wy + wh + 2]; anchors.steam = [cx - 60, wy + wh - 16];
         anchors.cash = [cx + 48, wy + wh - 4];
         anchors.owner = [cx + 46, wy + wh + 2];
-        potFire(g, anchors.pot[0], anchors.pot[1], T, W.lvl.stove > 0);
+        potFire(g, anchors.pot[0], anchors.pot[1], T, W.lvl.stove > 0 && CF > .5);
         g.fillStyle = '#3e2e20'; rr(g, x + cw + 8, GY - 26, 30, 26, 2); g.fill();
         break;
       }
@@ -665,7 +690,7 @@
         anchors.owner = [x + cw - 60, GY];
         anchors.crew = [x + 26, x + cw - 90];
         anchors.queue = cx + cw * .30;
-        potFire(g, anchors.pot[0], anchors.pot[1], T, W.lvl.stove > 0);
+        potFire(g, anchors.pot[0], anchors.pot[1], T, W.lvl.stove > 0 && CF > .5);
         break;
       }
 
@@ -745,7 +770,7 @@
           g.lineTo(x + s2 * sw2 + sw2 * .55, top - 26);
           g.lineTo(x + (s2 + 1) * sw2, top);
           g.closePath(); g.fill();
-          g.fillStyle = 'rgba(255,206,140,' + (.42 * NF) + ')';
+          g.fillStyle = 'rgba(255,206,140,' + (.42 * NF * CF) + ')';
           g.beginPath();
           g.moveTo(x + s2 * sw2 + sw2 * .58, top - 24);
           g.lineTo(x + (s2 + 1) * sw2 - 3, top - 1);
@@ -814,8 +839,13 @@
   function rainFor(ms) { rainUntil = performance.now() + ms; }
   function isRaining() { return performance.now() < rainUntil; }
 
+  /* سقف ذرات — بدون این، در نرخ‌های بالا هزاران ذره جمع می‌شود */
+  var CAP = { coins: 26, floats: 18, sparks: 70, steam: 44, smoke: 26, drops: 420, ripples: 30 };
+
   function spawnCoin(v, big) {
     if (RM || !lastAnchors) return;
+    if (coins.length >= CAP.coins) coins.shift();
+    if (floats.length >= CAP.floats) floats.shift();
     var c = lastAnchors.cash;
     coins.push({
       x: c[0] + rnd(-12, 12), y: c[1], vy: rnd(-96, -66), vx: rnd(-18, 18),
@@ -828,6 +858,7 @@
   }
   function burst(x, y, n, col) {
     if (RM) return;
+    n = Math.min(n, Math.max(0, CAP.sparks - sparks.length));
     for (var i = 0; i < n; i++) {
       sparks.push({ x: x, y: y, vx: rnd(-80, 80), vy: rnd(-100, -20), life: 0, max: rnd(.35, .7), col: col || '#ffd68f' });
     }
@@ -897,6 +928,80 @@
   var walkers = [], vehicles = [], birds = [], cats = [];
   var walkT = 2.4, vehT = 5, birdT = 22, catT = 34;
 
+  /* ═════════ کادوها ═════════
+     گاهی دست یک رهگذر یا روی یک ماشین کادویی هست. اگر بازیکن
+     رویش بزند، جایزه می‌گیرد. */
+  var giftT = 22, giftId = 0;
+  function armGift(o) {
+    o.gift = ++giftId;
+    o.giftPhase = rnd(0, 6.3);
+    return o;
+  }
+  function drawGift(g, x, y, sc, T, phase) {
+    var pulse = .78 + Math.sin(T * 3.4 + phase) * .22;
+    var bob = Math.sin(T * 2.2 + phase) * 2.2;
+    g.save();
+    g.translate(x, y + bob);
+    g.scale(sc, sc);
+    /* هاله تا از دور دیده شود */
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = .5 * pulse;
+    g.drawImage(glowSprite, -34, -34, 68, 68);
+    g.restore();
+    /* جعبه */
+    g.fillStyle = '#c9433a';
+    rr(g, -9, -8, 18, 15, 2.5); g.fill();
+    g.fillStyle = '#a8342c';
+    rr(g, -10, -11, 20, 5, 2); g.fill();
+    g.fillStyle = '#f2d79a';
+    g.fillRect(-1.8, -11, 3.6, 18);
+    g.fillRect(-10, -3.2, 20, 3.2);
+    /* پاپیون */
+    g.beginPath();
+    g.moveTo(0, -11); g.quadraticCurveTo(-7, -18, -3, -11);
+    g.moveTo(0, -11); g.quadraticCurveTo(7, -18, 3, -11);
+    g.fillStyle = '#f2d79a'; g.fill();
+    /* برق */
+    g.globalAlpha = pulse;
+    g.fillStyle = 'rgba(255,255,255,.85)';
+    g.beginPath();
+    g.moveTo(7, -16); g.lineTo(8.4, -12.6); g.lineTo(11.8, -11.2);
+    g.lineTo(8.4, -9.8); g.lineTo(7, -6.4); g.lineTo(5.6, -9.8);
+    g.lineTo(2.2, -11.2); g.lineTo(5.6, -12.6);
+    g.closePath(); g.fill();
+    g.restore();
+  }
+  /* نقطه‌ی کادوی هر حامل در مختصات صحنه */
+  function giftPoint(o) {
+    if (o.kind) return { x: o.x, y: o.y - 52, r: 40 };          /* ماشین */
+    return { x: o.x, y: o.y - 46 * (o.sc || 1), r: 34 * Math.max(.8, o.sc || 1) };
+  }
+  function hitGift(wx, wy) {
+    var all = walkers.concat(vehicles);
+    var best = null, bestD = 1e9;
+    for (var i = 0; i < all.length; i++) {
+      var o = all[i];
+      if (!o.gift) continue;
+      var p = giftPoint(o);
+      var d = Math.hypot(wx - p.x, wy - p.y);
+      if (d < p.r && d < bestD) { bestD = d; best = o; }
+    }
+    return best;
+  }
+  function takeGift(o) {
+    if (!o || !o.gift) return;
+    var p = giftPoint(o);
+    o.gift = 0;
+    burst(p.x, p.y, 18, '#ffd68f');
+    burst(p.x, p.y, 10, '#9ff0b4');
+  }
+  function hasGift() {
+    for (var i = 0; i < walkers.length; i++) if (walkers[i].gift) return true;
+    for (var j = 0; j < vehicles.length; j++) if (vehicles[j].gift) return true;
+    return false;
+  }
+
   function tickTraffic(dt, W) {
     if (RM) return;
     var r = W.rate;
@@ -911,8 +1016,11 @@
       o.sc = fg ? 1.7 : .84;
       o.sp = (fg ? 74 : 46) * rnd(.85, 1.25);
       o.t = rnd(0, 6);
+      /* کادو فقط روی رهگذر پس‌زمینه — جلویی سیاه است و دیده نمی‌شود */
+      if (!fg && giftT <= 0 && !hasGift()) { armGift(o); giftT = rnd(55, 105); }
       walkers.push(o);
     }
+    giftT -= dt;
     for (var i = walkers.length - 1; i >= 0; i--) {
       var w = walkers[i];
       w.x += w.dir * w.sp * dt; w.t += dt * w.sp * .13;
@@ -928,11 +1036,13 @@
       if (kinds.length) {
         var kind = U.pick(kinds);
         var vd = Math.random() < .5 ? 1 : -1;
-        vehicles.push({
+        var veh = {
           kind: kind, dir: vd, x: vd > 0 ? -160 : VW + 160,
           y: GY + (kind === 'bike' ? 104 : 118),
           sp: kind === 'bike' ? rnd(230, 300) : rnd(150, 200)
-        });
+        };
+        if (giftT <= 0 && !hasGift()) { armGift(veh); giftT = rnd(55, 105); }
+        vehicles.push(veh);
         vehT = Math.max(3.5, 12 - (W.lvl.peyk || 0) * .3 - W.tier * .4) + Math.random() * 4;
       } else vehT = 6;
     }
@@ -1045,6 +1155,10 @@
         t: w.t, walk: 1, flip: w.dir < 0,
         rim: fg ? 0 : .35 * NF, shadow: !fg
       });
+      if (w.gift) {
+        var p = giftPoint(w);
+        drawGift(g, p.x, p.y, Math.max(.9, w.sc || 1), T, w.giftPhase);
+      }
     }
   }
   function drawVehicles(g, T) {
@@ -1061,6 +1175,10 @@
       g.restore();
       g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = .13;
       g.drawImage(glowSprite, v.x - 130, v.y - 24, 260, 70); g.restore();
+      if (v.gift) {
+        var gp = giftPoint(v);
+        drawGift(g, gp.x, gp.y, 1.15, T, v.giftPhase);
+      }
     }
   }
 
@@ -1135,7 +1253,7 @@
     if (RM) return;
     var fac = D.TIERS[W.tier].fac;
     if (!fac.chimneys && !(W.tier >= 4)) return;
-    if (Math.random() < dt * 4) {
+    if (smoke.length < CAP.smoke && Math.random() < dt * 4) {
       var sx = a ? a.steam[0] : 300, sy = a ? a.steam[1] : 200;
       smoke.push({ x: sx + rnd(-16, 16), y: sy, vx: rnd(-8, 14), vy: rnd(-24, -14), r: rnd(12, 22), life: 0, max: rnd(3.4, 5.6) });
     }
@@ -1177,7 +1295,7 @@
     if (RM || !a) return;
     if (W.lvl.stove > 0 && W.tier <= 3) {
       var want = clamp(1 + Math.log10(1 + W.rate) * 1.1, 1, 5);
-      if (steam.length < want * 8 && Math.random() < dt * want * 3.2) {
+      if (steam.length < Math.min(CAP.steam, want * 8) && Math.random() < dt * want * 3.2) {
         steam.push({
           x: a.steam[0] + rnd(-10, 10), y: a.steam[1],
           vx: rnd(-6, 6), vy: rnd(-28, -17), r: rnd(5, 12), life: 0, max: rnd(1.6, 2.9)
@@ -1207,9 +1325,9 @@
   /* ═════════ هوا ═════════ */
   function tickWeather(dt) {
     var on = isRaining();
-    if (on && !RM) {
+    if (on && !RM && K > 0) {
       var top = -OY / K - 90;
-      var count = Math.round(dt * 320);
+      var count = Math.min(Math.round(dt * (quality >= 2 ? 320 : 150)), CAP.drops - drops.length);
       for (var i = 0; i < count; i++) {
         drops.push({ x: rnd(-260, VW + 260), y: top + rnd(-90, 0), v: rnd(720, 990), len: rnd(11, 24) });
       }
@@ -1222,7 +1340,7 @@
       d.y += d.v * dt; d.x += d.v * .16 * dt;
       if (d.y > bot) {
         drops.splice(j, 1);
-        if (Math.random() < .1) {
+        if (Math.random() < .1 && ripples.length < CAP.ripples) {
           var ry = clamp(bot - rnd(0, 90), GY + 4, bot);
           ripples.push({ x: d.x, y: ry, r: 1, life: 0, max: .55 });
         }
@@ -1302,9 +1420,9 @@
     g.globalAlpha = .17;
     g.translate(0, GY * (1 + REF_SQUASH) + 4);
     g.scale(1, -REF_SQUASH);
-    if (supportsFilter) g.filter = 'blur(1.2px)';
+    /* بدون filter — تاری هر فریمی روی موبایل کمرشکن است.
+       شفافیت پایین و فشردگی، همان حس را می‌دهد. */
     drawFacade(g, fac, T, W, true);
-    g.filter = 'none';
     g.restore();
     /* محو شدن نرم بدون لبه‌ی تیز */
     var fade = g.createLinearGradient(0, GY + 3, 0, GY + 125);
@@ -1371,7 +1489,7 @@
   }
 
   /* ═════════ آماده‌سازی ═════════ */
-  function init(canvas) {
+  function attach(canvas) {
     cv = canvas;
     ctx = cv.getContext('2d', { alpha: false });
     supportsFilter = (function () {
@@ -1382,25 +1500,60 @@
       } catch (e) { return false; }
     })();
     FONT = getComputedStyle(document.body).fontFamily || 'sans-serif';
-    buildGlow();
-    buildGrain();
-    buildBackdrop();
-    resize();
   }
 
-  function resize() {
+  /* مراحل آماده‌سازی — صفحه‌ی بارگذاری این‌ها را یکی‌یکی اجرا می‌کند */
+  function initSteps(canvas) {
+    return [
+      { label: 'روشن کردن بوم', fn: function () { attach(canvas); } },
+      { label: 'ساختن نور چراغ‌ها', fn: buildGlow },
+      { label: 'دانه‌ی فیلم', fn: buildGrain },
+      { label: 'ساختن شهر پشت سر', fn: buildBackdrop },
+      { label: 'جارو کردن خیابان', fn: resize }
+    ];
+  }
+
+  function init(canvas) {
+    initSteps(canvas).forEach(function (s) { s.fn(); });
+  }
+
+  /* چگالی پیکسل را به کیفیت گره می‌زنیم. روی موبایل DPR=۳ یعنی
+     نُه برابر پیکسل — تنها همین یک عدد می‌تواند گوشی را بخواباند. */
+  function pickDPR() {
+    var d = window.devicePixelRatio || 1;
+    var cap = quality >= 2 ? 1.75 : (quality === 1 ? 1.4 : 1.1);
+    if (lowEnd) cap = Math.min(cap, 1.5);
+    return Math.min(d, cap);
+  }
+
+  var lastW = 0, lastH = 0, lastDPR = 0;
+
+  function resize(force) {
     if (!cv) return;
     var r = cv.getBoundingClientRect();
-    DPR = Math.min(2, window.devicePixelRatio || 1);
-    CW = Math.max(1, Math.round(r.width));
-    CH = Math.max(1, Math.round(r.height));
+    var w = Math.max(1, Math.round(r.width));
+    var h = Math.max(1, Math.round(r.height));
+    var dpr = pickDPR();
+    /* نوار آدرس موبایل که باز و بسته می‌شود، ResizeObserver را
+       ده‌ها بار در ثانیه صدا می‌زند. بدون این نگهبان، هر بار چند
+       مگابایت بوم تازه ساخته می‌شد. */
+    if (!force && w === lastW && h === lastH && Math.abs(dpr - lastDPR) < .01) return;
+    lastW = w; lastH = h; lastDPR = dpr;
+
+    DPR = dpr;
+    CW = w; CH = h;
     cv.width = Math.round(CW * DPR);
     cv.height = Math.round(CH * DPR);
 
-    frameBuf = off(cv.width, cv.height);
-    fctx = frameBuf.getContext('2d', { alpha: false });
-    blurBuf = off(Math.max(1, Math.round(cv.width / 4)), Math.max(1, Math.round(cv.height / 4)));
-    bctx = blurBuf.getContext('2d');
+    if (quality >= 2) {
+      frameBuf = off(cv.width, cv.height);
+      fctx = frameBuf.getContext('2d', { alpha: false });
+      blurBuf = off(Math.max(1, Math.round(cv.width / 5)), Math.max(1, Math.round(cv.height / 5)));
+      bctx = blurBuf.getContext('2d');
+    } else {
+      /* در کیفیت پایین اصلاً بافر نگه نمی‌داریم تا حافظه آزاد شود */
+      frameBuf = null; fctx = null; blurBuf = null; bctx = null;
+    }
 
     vign = ctx.createRadialGradient(CW / 2, CH * .42, Math.min(CW, CH) * .16, CW / 2, CH * .5, Math.max(CW, CH) * .82);
     vign.addColorStop(0, 'rgba(0,0,0,0)');
@@ -1483,6 +1636,21 @@
     g.restore();
   }
 
+  /* تابلوی «بسته است» */
+  function closedPlate(g, fac, T) {
+    var cx = 500, y = fac.top + (fac.style === 'cart' ? -70 : 34);
+    g.save();
+    g.globalAlpha = .92;
+    g.fillStyle = '#12161f';
+    rr(g, cx - 62, y, 124, 30, 5); g.fill();
+    g.strokeStyle = '#4a3a24'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = 'rgba(214,178,120,.9)';
+    g.font = '700 17px ' + FONT;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('بسته است', cx, y + 16);
+    g.restore();
+  }
+
   function renderScene(g, T, W, dawn) {
     var sx = 0, sy = 0;
     if (shakeT > 0) {
@@ -1490,6 +1658,7 @@
       sx = rnd(-1, 1) * shakeP * shakeT * 2.6;
       sy = rnd(-1, 1) * shakeP * shakeT * 2.6;
     }
+    CF = W.closed ? .09 : 1;
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
     g.fillStyle = '#02040a';
     g.fillRect(0, 0, CW, CH);
@@ -1517,9 +1686,12 @@
     drawCats(g, T);
 
     lastAnchors = drawFacade(g, fac, T, W, false);
+    if (W.closed) closedPlate(g, fac, T);
 
-    drawCrew(g, T, W);
-    drawOwner(g, lastAnchors.owner[0], lastAnchors.owner[1], T, .88, W.rate > 0);
+    if (!W.closed) {
+      drawCrew(g, T, W);
+      drawOwner(g, lastAnchors.owner[0], lastAnchors.owner[1], T, .88, W.rate > 0);
+    }
     drawSteam(g);
     drawCustomers(g, T);
     drawParticles(g);
@@ -1570,8 +1742,8 @@
     }
     drawBokeh(ctx, T);
 
-    /* درجه‌بندی رنگ: سایه‌ی سرد، روشنی گرم */
-    if (gradeGrad && quality >= 1) {
+    /* درجه‌بندی رنگ: سایه‌ی سرد، روشنی گرم — soft-light روی موبایل گران است */
+    if (gradeGrad && quality >= 2) {
       ctx.save();
       ctx.globalCompositeOperation = 'soft-light';
       ctx.globalAlpha = .72;
@@ -1581,18 +1753,25 @@
     }
 
     if (vign) { ctx.fillStyle = vign; ctx.fillRect(0, 0, CW, CH); }
-    if (grain && !RM && quality >= 1) {
+    if (grain && !RM && quality >= 2) {
       ctx.globalAlpha = .04;
       ctx.drawImage(grain, -(Math.random() * 30 | 0), -(Math.random() * 30 | 0), CW + 30, CH + 30);
       ctx.globalAlpha = 1;
     }
 
-    /* کیفیت وفق‌پذیر */
+    /* کیفیت وفق‌پذیر — سریع پایین می‌آید، آهسته بالا می‌رود */
     var ms = performance.now() - t0;
-    frameMs = frameMs * .9 + ms * .1;
-    if (frameMs > 22) { slowFrames++; fastFrames = 0; } else if (frameMs < 9) { fastFrames++; slowFrames = 0; }
-    if (slowFrames > 90 && quality > 0) { quality--; slowFrames = 0; }
-    else if (fastFrames > 260 && quality < 2 && !RM) { quality++; fastFrames = 0; }
+    frameMs = frameMs * .88 + ms * .12;
+    if (frameMs > 30) { slowFrames += 4; fastFrames = 0; }
+    else if (frameMs > 19) { slowFrames += 1; fastFrames = 0; }
+    else if (frameMs < 8) { fastFrames++; slowFrames = Math.max(0, slowFrames - 1); }
+    if (slowFrames > 24 && quality > 0) {
+      quality--; slowFrames = 0; fastFrames = 0;
+      resize(true);
+    } else if (fastFrames > 900 && quality < 2 && !RM) {
+      quality++; fastFrames = 0; slowFrames = 0;
+      resize(true);
+    }
   }
 
   function toWorld(clientX, clientY) {
@@ -1734,19 +1913,27 @@
     sparks.length = 0; drops.length = 0; smoke.length = 0; ripples.length = 0;
     custs.length = 0; walkers.length = 0; vehicles.length = 0;
     birds.length = 0; cats.length = 0; crewLook.length = 0;
-    rainUntil = 0; flash = 0;
+    rainUntil = 0; flash = 0; giftT = 18;
   }
 
   A.scene = {
-    init: init, resize: resize, update: update, render: render,
+    init: init, initSteps: initSteps, resize: resize, update: update, render: render,
     setTier: setTier, snapCamera: snapCamera, punch: punch,
     spawnCoin: spawnCoin, burst: burst, shake: shake, rainFor: rainFor,
     toWorld: toWorld, reset: reset,
+    hitGift: hitGift, takeGift: takeGift, hasGift: hasGift,
     drawAvatar: drawAvatar, drawEventArt: drawEventArt,
     person: person, randomLook: randomLook,
     anchors: function () { return lastAnchors; },
     stats: function () { return { quality: quality, ms: Math.round(frameMs * 10) / 10, night: Math.round(NF * 100) / 100 }; },
-    setQuality: function (q) { quality = clamp(q | 0, 0, 2); },
+    setQuality: function (q) {
+      var n = clamp(q | 0, 0, 2);
+      if (n === quality) return;
+      quality = n;
+      slowFrames = 0; fastFrames = 0;
+      resize(true);   /* بافرها و چگالی پیکسل باید دوباره ساخته شوند */
+    },
+    isLowEnd: function () { return lowEnd; },
     setCycle: function (v) { cycleT = clamp(v, 0, CYCLE - .01) * CYCLE; }
   };
 })(window.ABRO);
