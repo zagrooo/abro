@@ -78,18 +78,69 @@
       '<button class="autobtn" id="autoCrewBtn">' +
       svg('<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>') +
       '<span>چیدن خودکار نیروها</span><i id="autoCrewInfo">—</i></button>' +
-      '<div class="sechead">چه کسی کجا بایستد</div>' +
+      '<div class="sechead">ایستگاه‌ها</div>' +
       D.STATIONS.map(function (s) {
         return '<div class="card" data-crewcard="' + s.id + '">' +
           '<div class="c-ico">' + svg(s.icon) + '</div>' +
           '<div class="c-mid"><div class="c-name">' + s.name + '</div>' +
           '<div class="c-meta" data-cmeta>—</div>' +
-          '<div class="crewrow">' +
-          '<button class="cbtn" data-crew="-1" data-id="' + s.id + '">−</button>' +
-          '<span class="dots" data-dots></span>' +
-          '<button class="cbtn" data-crew="1" data-id="' + s.id + '">+</button>' +
-          '</div></div></div>';
-      }).join('');
+          '<div class="c-bar"><i data-manbar style="width:0%"></i></div></div>' +
+          '<div class="powbox"><b data-pow>۰</b><i data-need>/۰</i></div>' +
+          '</div>';
+      }).join('') +
+      '<div class="sechead">کارمندها</div>' +
+      '<div id="staffList"></div>';
+  }
+
+  /* فهرست کارمندها — هر کارت یک نفر با نقش و درجه و جای فعلی */
+  function staffListHTML() {
+    var list = St.staffAll();
+    if (!list.length) {
+      return '<div class="note">هنوز کسی را استخدام نکرده‌ای. ' +
+        'ایستگاه بدون نیرو فقط ۴۵٪ کار می‌کند.</div>';
+    }
+    /* نقش‌های کلی اول، بعد ایستگاهی — چون کلی‌ها تصمیم ندارند */
+    var order = list.map(function (m, i) { return { m: m, i: i }; });
+    order.sort(function (a, b) {
+      var ga = A.staff.isGlobal(A.staff.role(a.m.r)) ? 0 : 1;
+      var gb = A.staff.isGlobal(A.staff.role(b.m.r)) ? 0 : 1;
+      if (ga !== gb) return ga - gb;
+      return b.m.g - a.m.g;
+    });
+
+    return order.map(function (o) {
+      var m = o.m, r = A.staff.role(m.r), g = A.staff.grade(m.g);
+      var glob = A.staff.isGlobal(r);
+      var where = glob ? 'دفتر' : (m.at ? stationName(m.at) : 'بیکار');
+      var opts = '';
+      if (!glob) {
+        opts = '<select class="stsel" data-assign="' + o.i + '">' +
+          '<option value=""' + (m.at ? '' : ' selected') + '>بیکار</option>' +
+          D.STATIONS.filter(function (s) { return St.S.lvl[s.id] > 0; }).map(function (s) {
+            var fit = r.st === s.id ? ' ✓' : '';
+            return '<option value="' + s.id + '"' + (m.at === s.id ? ' selected' : '') + '>' +
+              s.name + fit + '</option>';
+          }).join('') + '</select>';
+      }
+      return '<div class="stcard g' + m.g + (glob ? ' glob' : '') + (m.at || glob ? '' : ' idle') + '">' +
+        '<div class="st-ic">' + svg(r.icon) + '</div>' +
+        '<div class="st-mid">' +
+        '<div class="st-nm"><b>' + r.name + '</b>' +
+        '<span class="st-g" style="color:' + g.color + '">' + g.name + '</span></div>' +
+        '<div class="st-d">' + r.desc + '</div></div>' +
+        (opts || '<span class="st-where">' + where + '</span>') +
+        '</div>';
+    }).join('');
+  }
+  function stationName(id) {
+    for (var i = 0; i < D.STATIONS.length; i++) if (D.STATIONS[i].id === id) return D.STATIONS[i].name;
+    return id;
+  }
+  /* امضای فهرست کارمندها — تا وقتی عوض نشده دوباره ساخته نشود،
+     وگرنه هر ۳۲۰ میلی‌ثانیه منوی باز زیر دست بازیکن بسته می‌شود. */
+  function staffSig() {
+    return St.staffAll().map(function (m) { return m.r + m.g + (m.at || '-'); }).join('|') +
+      '#' + D.STATIONS.filter(function (s) { return St.S.lvl[s.id] > 0; }).length;
   }
 
   function htmlGrow() {
@@ -135,24 +186,53 @@
     }).join('');
 
     var packs = D.GEM_PACKS.map(function (p) {
-      return '<button class="pack" data-pack="' + p.id + '">' +
+      return '<button class="pack' + (p.best ? ' best' : '') + (p.hot ? ' hot' : '') +
+        '" data-pack="' + p.id + '">' +
         (p.tag ? '<span class="pack-tag">' + p.tag + '</span>' : '') +
         '<span class="pack-gem"><svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/></svg></span>' +
         '<b>' + fa(p.gems) + '</b><span class="pack-price">' + p.price + '</span></button>';
     }).join('');
 
-    return '<div class="gembar"><span class="gembar-l">الماس تو</span>' +
+    /* بسته‌های ویژه — فقط آن‌هایی که شرطشان جور است */
+    var bundles = D.BUNDLES.filter(St.packAvailable).map(function (b) {
+      var give = A.game.packContents(b).map(function (c) {
+        return '<span class="bd-item">' + c.text + '</span>';
+      }).join('');
+      return '<button class="bundle ' + (b.color || '') + '" data-pack="' + b.id + '">' +
+        (b.tag ? '<span class="bd-tag">' + b.tag + '</span>' : '') +
+        '<div class="bd-head">' +
+        '<span class="bd-ic">' + svg(b.icon) + '</span>' +
+        '<div><b>' + b.name + '</b><i>' + b.desc + '</i></div></div>' +
+        '<div class="bd-give">' + give + '</div>' +
+        '<span class="bd-price">' + b.price + '</span></button>';
+    }).join('');
+
+    var subBox = '';
+    if (St.subActive()) {
+      var ready = St.subChestReady();
+      subBox = '<div class="subbox' + (ready ? ' ready' : '') + '">' +
+        '<div class="sb-mid"><b>صندوق روزانه</b>' +
+        '<i>' + fa(St.subDaysLeft()) + ' روز مانده</i></div>' +
+        '<button class="sb-btn" id="subChestBtn"' + (ready ? '' : ' disabled') + '>' +
+        (ready ? 'بگیر ۲۰' : 'فردا') + '</button></div>';
+    }
+
+    return '<div class="gembar"><span class="gembar-l">فیروزه‌ی تو</span>' +
       '<span class="gembar-v"><svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/></svg>' +
       '<b id="storeGems">۰</b></span></div>' +
-      '<div class="sechead">با الماس بخر</div>' + items +
-      '<div class="sechead">الماس رایگان</div>' +
+      (A.billing.isTest()
+        ? '<div class="testflag">حالت آزمایشی — هیچ درگاه پرداختی وصل نیست و هیچ پولی کم نمی‌شود</div>'
+        : '') +
+      subBox +
+      (bundles ? '<div class="sechead">بسته‌های ویژه</div><div class="bundles">' + bundles + '</div>' : '') +
+      '<div class="sechead">بسته‌های فیروزه</div>' +
+      '<div class="packs">' + packs + '</div>' +
+      '<div class="sechead">با فیروزه بخر</div>' + items +
+      '<div class="sechead">فیروزه‌ی رایگان</div>' +
       '<button class="adbtn" id="adGemBtn">' +
       svg('<path d="M4 5h16v11H4z"/><path d="M10 8.5l4 2.5-4 2.5z"/><path d="M9 20h6"/>') +
-      '<span><b>تماشای تبلیغ</b><i id="adLeft">—</i></span><span class="adplus">+۲</span></button>' +
-      '<div class="sechead">بسته‌های الماس</div>' +
-      '<div class="packs">' + packs + '</div>' +
-      '<div class="note store-note">این فروشگاه <b>نمایشی</b> است. هیچ درگاه پرداختی وصل نیست و ' +
-      'هیچ پولی از حساب کسی کم نمی‌شود. برای گرفتن الماس واقعی، تبلیغ ببین یا نشان بگیر.</div>';
+      '<span><b>' + (St.adsDisabled() ? 'جایزه‌ی روزانه' : 'تماشای تبلیغ') +
+      '</b><i id="adLeft">—</i></span><span class="adplus">+۲</span></button>';
   }
 
   function htmlMore() {
@@ -219,7 +299,7 @@
     var r = St.rate(), used = St.spaceUsed(), cap = St.spaceCap(), free = St.crewFree();
 
     if (tab === 'shop') {
-      var bestId = St.bestStationId();
+      var picks = St.bestPicks();
       D.STATIONS.forEach(function (s) {
         var el = document.querySelector('[data-card="' + s.id + '"]');
         if (!el) return;
@@ -227,7 +307,8 @@
         var afford = !locked && !p.full && S.money >= p.c;
         el.classList.toggle('locked', locked);
         el.classList.toggle('ready', afford);
-        el.classList.toggle('best', !locked && s.id === bestId);
+        el.classList.toggle('best', !locked && s.id === picks.buy);
+        el.classList.toggle('target', !locked && s.id === picks.target);
         el.querySelector('[data-lv]').textContent = fa(lvl);
         var meta = el.querySelector('[data-meta]');
         var sr = St.stationRate(s);
@@ -251,17 +332,20 @@
 
     } else if (tab === 'crew') {
       var c = St.hireCost(), hb = $('hireBtn');
+      var total = St.hiredCount();
       if (hb) {
-        $('hiredLv').textContent = fa(S.hired);
+        $('hiredLv').textContent = fa(total);
         $('hireCost').textContent = money(c);
-        $('hireMeta').textContent = 'دستمزد هر نفر ' + money(St.wage()) + ' در هر هشت ساعت';
+        $('hireMeta').textContent = total
+          ? ('دستمزد کل ' + money(St.wage()) + ' در هر هشت ساعت')
+          : 'اولین نفر را بیاور';
         hb.classList.toggle('can', S.money >= c);
       }
       var cn = $('crewNote');
       var short = St.understaffed();
-      if (cn) cn.innerHTML = 'نیروی بیکار: <b>' + fa(free) + '</b> از ' + fa(S.hired) +
-        ' — ایستگاه بدون نیرو فقط ۴۵٪ کار می‌کند. نیروی زیادی هم دستمزد می‌برد.' +
-        (short ? '<br><b style="color:#f0a08e">' + fa(short) + ' ایستگاه نیروی کامل ندارد.</b>' : '');
+      if (cn) cn.innerHTML = 'بیکار: <b>' + fa(free) + '</b> از ' + fa(total) +
+        ' — درجه‌ی بالاتر یعنی توان بیشتر، ولی دستمزد بیشتر هم می‌برد.' +
+        (short ? '<br><b style="color:#f0a08e">' + fa(short) + ' ایستگاه توانِ کافی ندارد.</b>' : '');
       var ab = $('autoCrewBtn'), ai = $('autoCrewInfo');
       if (ab) {
         var can = free > 0 && short > 0;
@@ -269,21 +353,28 @@
         ab.disabled = !can;
         if (ai) ai.textContent = can
           ? (fa(Math.min(free, short)) + ' نفر جابه‌جا می‌شود')
-          : (free <= 0 ? 'نیروی بیکار نداری' : 'همه سرِ جایشان هستند');
+          : (free <= 0 ? 'کسی بیکار نیست' : 'همه سرِ جایشان هستند');
       }
       D.STATIONS.forEach(function (s) {
         var el = document.querySelector('[data-crewcard="' + s.id + '"]');
         if (!el) return;
-        var lvl = S.lvl[s.id], nd = St.crewNeed(s.id);
+        var lvl = S.lvl[s.id], nd = St.crewNeed(s.id), pw = St.crewPower(s.id);
+        var man = nd ? Math.min(1, pw / nd) : 1;
         el.classList.toggle('locked', !lvl);
-        el.querySelector('[data-dots]').innerHTML = dotsHTML(nd, S.crew[s.id]);
+        el.classList.toggle('ready', !!lvl && pw >= nd);
         el.querySelector('[data-cmeta]').textContent = lvl
-          ? ('کارایی ' + U.pct((.45 + .55 * (nd ? Math.min(1, S.crew[s.id] / nd) : 1)) * 100))
+          ? ('کارایی ' + U.pct((.45 + .55 * man) * 100))
           : 'هنوز راه نیفتاده';
-        var btns = el.querySelectorAll('.cbtn');
-        btns[0].disabled = S.crew[s.id] <= 0;
-        btns[1].disabled = free <= 0 || S.crew[s.id] >= nd || !lvl;
+        el.querySelector('[data-manbar]').style.width = (man * 100) + '%';
+        /* توان، نه تعداد: استادِ آشپز پشت اجاق ۳٫۷۵ می‌ارزد */
+        el.querySelector('[data-pow]').textContent = fa(pw.toFixed(1));
+        el.querySelector('[data-need]').textContent = '/' + fa(nd);
       });
+      var sl = $('staffList');
+      if (sl && sl.dataset.sig !== staffSig()) {
+        sl.dataset.sig = staffSig();
+        sl.innerHTML = staffListHTML();
+      }
 
     } else if (tab === 'grow') {
       var t = St.tier(), tb = $('tierBtn'), cost = St.tierCost();
@@ -448,7 +539,37 @@
       $('rateBadge').classList.remove('closed');
     }
 
-    $('shopName').textContent = t.name;
+    /* ساعت بازی، حال‌وهوای این ساعت، و تاریخ شمسیِ واقعی */
+    var band = A.clock.bandAt(S.hour);
+    $('ckTime').textContent = A.clock.label(S.hour);
+    var mood = $('ckMood');
+    mood.textContent = band.name + ' ×' + fa(band.mul.toFixed(2));
+    mood.className = 'ck-mood ' + band.mood;
+    $('ckDate').textContent = A.clock.dateLabel();
+
+    /* هوای امروز */
+    var wx = St.weather();
+    if (wx) {
+      var wxEl = $('ckWx');
+      wxEl.querySelector('svg').innerHTML = wx.icon;
+      wxEl.querySelector('b').textContent = wx.name;
+      wxEl.className = 'ck-wx wx-' + wx.id;
+      wxEl.title = wx.note;
+    }
+
+    /* مناسبت */
+    var occ = St.occasion(), ob = $('occBar');
+    if (occ) {
+      ob.hidden = false;
+      ob.querySelector('.oc-ic svg').innerHTML = occ.icon;
+      $('occName').textContent = occ.name;
+      $('occNote').textContent = occ.note;
+      $('occMul').textContent = '×' + fa(occ.mul.toFixed(2));
+    } else ob.hidden = true;
+
+    /* نام شهر کنار نام مغازه — هر واگذاری یک شهر تازه */
+    var cty = St.city();
+    $('shopName').textContent = t.name + (cty ? ' · ' + cty.name : '');
     $('actLbl').textContent = 'پرده‌ی ' + fa(S.tier + 1) + '/' + fa(D.TIERS.length);
     $('integVal').textContent = fa(Math.round(S.integ));
     /* اصالت باید اثرش دیده شود، نه فقط عددش */
@@ -601,6 +722,21 @@
       return '<div class="r-row ' + row[2] + '" style="animation-delay:' + (i * 85 + 130) + 'ms">' +
         '<span class="k">' + row[0] + '</span><span class="num">' + val + '</span></div>';
     }).join('');
+    /* تفکیک ساعت‌ها: بازیکن ببیند شبش کجا گذشت */
+    var bd = $('rcBands');
+    if (bd) {
+      if (d.bands && d.bands.length) {
+        bd.hidden = false;
+        bd.innerHTML = '<div class="rb-t">از ' + A.clock.label(d.startHour) +
+          ' تا ' + A.clock.label(d.startHour + d.hours) + '</div>' +
+          d.bands.map(function (b) {
+            var w = clamp(b.hours / d.hours * 100, 0, 100);
+            return '<div class="rb-row"><span>' + b.name + '</span>' +
+              '<span class="rb-bar"><i style="width:' + w + '%"></i></span>' +
+              '<span class="num">' + fa(b.hours.toFixed(1)) + 'س</span></div>';
+          }).join('');
+      } else bd.hidden = true;
+    }
     $('rcNote').textContent = d.note;
     $('rcNet').textContent = money(d.net);
     var ad = $('rcAd');
@@ -618,6 +754,30 @@
     if (done) { $('rcAd').disabled = true; $('rcAd').textContent = 'دو برابر شد'; }
   }
   function hideReceipt() { $('rcVeil').hidden = true; }
+
+  /* ═════════ داوطلب تازه ═════════ */
+  var hireTimer = null;
+  function showHire(member) {
+    var r = A.staff.role(member.r), g = A.staff.grade(member.g);
+    var veil = $('hireVeil');
+    veil.querySelector('.hc-ic').innerHTML = svg(r.icon);
+    $('hcRole').textContent = r.name;
+    $('hcGrade').textContent = g.name;
+    $('hcGrade').style.color = g.color;
+    $('hcDesc').textContent = r.desc;
+    var card = veil.querySelector('.hirecard');
+    card.className = 'hirecard g' + member.g;
+    veil.hidden = false;
+    clearTimeout(hireTimer);
+    /* خودش می‌رود؛ استخدام پشت‌سرهم نباید هر بار یک کلیک اضافه بخواهد */
+    hireTimer = setTimeout(hideHire, U.reduceMotion ? 600 : 2200);
+    veil.onclick = hideHire;
+  }
+  function hideHire() {
+    clearTimeout(hireTimer);
+    var v = $('hireVeil');
+    if (v) { v.hidden = true; v.onclick = null; }
+  }
 
   /* ═════════ کادو ═════════ */
   function showGift(reward, onTake, onTriple) {
@@ -637,12 +797,40 @@
   }
   function hideGift() { $('giftVeil').hidden = true; }
 
-  /* ═════════ اعلان خرید ═════════ */
-  function showBuyNotice(pack) {
-    $('buyGems').textContent = fa(pack.gems);
-    $('buyPrice').textContent = pack.price;
-    $('buyVeil').hidden = false;
-    $('buyOk').onclick = function () { $('buyVeil').hidden = true; };
+  /* ═════════ کارت تأیید خرید ═════════ */
+  var ICONS = {
+    gem: '<path d="M6 3h12l4 6-10 12L2 9z"/>',
+    coin: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M9.5 10h5M9.5 14h5"/>',
+    crew: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M18 8v6M15 11h6"/>',
+    space: '<path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>',
+    abroo: '<path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/>',
+    noads: '<path d="M4 5h16v11H4z"/><path d="M9 20h6"/><path d="M4 5l16 11"/>'
+  };
+
+  function showPurchase(item, onConfirm, onCancel) {
+    var name = item.name || (fa(item.gems) + ' فیروزه');
+    $('pcName').textContent = name;
+    $('pcPrice').textContent = item.price;
+    $('pcTest').hidden = !A.billing.isTest();
+
+    var rows = A.game.packContents(item).map(function (c) {
+      return '<div class="pc-row"><span class="pc-ic">' +
+        svg(ICONS[c.icon] || ICONS.gem) + '</span><span>' + c.text + '</span></div>';
+    }).join('');
+    $('pcGive').innerHTML = rows;
+
+    var veil = $('pcVeil');
+    veil.hidden = false;
+
+    function close() {
+      veil.hidden = true;
+      veil.onclick = null;
+      $('pcOk').onclick = null;
+      $('pcNo').onclick = null;
+    }
+    $('pcOk').onclick = function () { close(); onConfirm(); };
+    $('pcNo').onclick = function () { close(); if (onCancel) onCancel(); };
+    veil.onclick = function (e) { if (e.target === veil) { close(); if (onCancel) onCancel(); } };
   }
 
   /* ═════════ کارت پرده ═════════ */
@@ -726,8 +914,6 @@
       var G = A.game;
       var up = e.target.closest('[data-up]');
       if (up) { G.buyStation(up.dataset.up, mult, up); return; }
-      var cw = e.target.closest('[data-crew]');
-      if (cw) { G.assignCrew(cw.dataset.id, +cw.dataset.crew); return; }
       if (e.target.closest('#hireBtn')) { G.hire(e.target.closest('#hireBtn')); return; }
       if (e.target.closest('#autoCrewBtn')) { G.autoCrew(); return; }
       if (e.target.closest('#tierBtn')) { G.upgradeTier(); return; }
@@ -737,7 +923,8 @@
       var ib = e.target.closest('[data-buyitem]');
       if (ib) { G.buyItem(ib.dataset.buyitem, ib); return; }
       var pk = e.target.closest('[data-pack]');
-      if (pk) { G.buyGemPack(pk.dataset.pack); return; }
+      if (pk) { G.buyPack(pk.dataset.pack); return; }
+      if (e.target.closest('#subChestBtn')) { G.claimSubChest(); return; }
       if (e.target.closest('#adGemBtn')) { G.watchAdForGems(); return; }
       if (e.target.closest('#resetBtn')) { clickReset(); return; }
       var q = e.target.closest('[data-q]');
@@ -749,6 +936,13 @@
         syncSheet();
         return;
       }
+    });
+
+    /* جابه‌جا کردن کارمند از منوی کشویی */
+    $('shBody').addEventListener('change', function (e) {
+      var sel = e.target.closest('[data-assign]');
+      if (!sel) return;
+      A.game.assignStaff(+sel.dataset.assign, sel.value);
     });
 
     $('goalClaim').addEventListener('click', function () { A.game.claimGoal(); });
@@ -787,8 +981,9 @@
     setGoal: setGoal, syncGoal: syncGoal,
     showEvent: showEvent, hideEvent: hideEvent,
     showReceipt: showReceipt, setReceiptNet: setReceiptNet, hideReceipt: hideReceipt,
-    showBuyNotice: showBuyNotice,
+    showPurchase: showPurchase,
     showGift: showGift, hideGift: hideGift,
+    showHire: showHire, hideHire: hideHire,
     showAct: showAct, showEnding: showEnding,
     coach: coach, hideCoach: hideCoach,
     paintAvatars: paintAvatars,

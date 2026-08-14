@@ -1323,6 +1323,67 @@
   }
 
   /* ═════════ هوا ═════════ */
+  /* ───────── برف ───────── */
+  var flakes = [];
+  function tickSnow(dt, on) {
+    if (RM) { flakes.length = 0; return; }
+    if (on && K > 0) {
+      var top = -OY / K - 60;
+      var want = quality >= 2 ? 150 : 70;
+      while (flakes.length < want) {
+        flakes.push({
+          x: rnd(-260, VW + 260), y: top + rnd(-120, 0),
+          v: rnd(28, 62), r: rnd(1.1, 2.6), ph: rnd(0, 6.3), sw: rnd(12, 30)
+        });
+      }
+    }
+    var bot = (CH - OY) / K + 40;
+    for (var i = flakes.length - 1; i >= 0; i--) {
+      var f = flakes[i];
+      f.y += f.v * dt;
+      f.ph += dt * 1.3;
+      f.x += Math.sin(f.ph) * f.sw * dt;
+      if (f.y > bot) {
+        if (on) { f.y = -OY / K - 40; f.x = rnd(-260, VW + 260); }
+        else flakes.splice(i, 1);
+      }
+    }
+  }
+  function drawSnow(g) {
+    if (!flakes.length) return;
+    g.save();
+    g.fillStyle = 'rgba(232,242,255,.75)';
+    for (var i = 0; i < flakes.length; i++) {
+      var f = flakes[i];
+      g.globalAlpha = .35 + Math.sin(f.ph) * .25;
+      g.beginPath(); g.arc(f.x, f.y, f.r, 0, 6.3); g.fill();
+    }
+    g.restore();
+  }
+
+  /* ───────── مه غلیظ ───────── */
+  var fogOn = 0;
+  function drawHeavyFog(g, T) {
+    if (fogOn <= .01) return;
+    g.save();
+    for (var i = 0; i < 5; i++) {
+      var y = GY - 150 + i * 60;
+      var xo = ((T * (5 + i * 3)) % (VW + 900)) - 450;
+      var gr = g.createLinearGradient(xo - 420, 0, xo + 420, 0);
+      gr.addColorStop(0, 'rgba(168,178,190,0)');
+      gr.addColorStop(.5, 'rgba(168,178,190,1)');
+      gr.addColorStop(1, 'rgba(168,178,190,0)');
+      g.globalAlpha = .085 * fogOn;
+      g.fillStyle = gr;
+      g.fillRect(xo - 420, y, 840, 70);
+    }
+    g.restore();
+  }
+
+  /* رنگ‌مایه‌ی شهر روی آسمان */
+  var cityTint = null;
+  function setCityTint(hex) { cityTint = hex || null; }
+
   function tickWeather(dt) {
     var on = isRaining();
     if (on && !RM && K > 0) {
@@ -1581,13 +1642,12 @@
     OY = CH / 2 - (cam.y + dy) * K;
   }
 
-  function dayNight(dt) {
-    cycleT = (cycleT + dt) % CYCLE;
-    var p = cycleT / CYCLE;
-    var dawn = Math.max(0, Math.sin((p - .60) / .32 * Math.PI));
-    if (p < .60 || p > .92) dawn = 0;
-    NF = 1 - dawn * .72;
-    return dawn;
+  /* روشناییِ صحنه از ساعت بازی می‌آید، نه از یک چرخه‌ی مستقل.
+     NF = چقدر شب است (۱ شب کامل، ۰ روز روشن). */
+  function dayNight(dt, gameHour) {
+    var day = (gameHour == null || !A.clock) ? 0 : A.clock.daylight(gameHour);
+    NF = 1 - day * .78;
+    return day;
   }
 
   function skyWash(g, dawn) {
@@ -1610,13 +1670,20 @@
 
   function update(dt, T, W) {
     camera(dt);
-    dayNight(dt);
+    dayNight(dt, W ? W.hour : null);
     tickCustomers(dt, W);
     tickTraffic(dt, W);
     tickSteam(dt, W, lastAnchors);
     tickSmoke(dt, W, lastAnchors);
     tickParticles(dt);
     tickWeather(dt);
+    /* هوای امروز از world می‌آید */
+    var wid = W && W.weather ? W.weather : 'clear';
+    tickSnow(dt, wid === 'snow');
+    var wantFog = (wid === 'fog') ? 1 : 0;
+    fogOn += (wantFog - fogOn) * Math.min(1, dt * .8);
+    if (wid === 'rain' && !isRaining()) rainFor(4000);
+    setCityTint(W ? W.cityTint : null);
   }
 
   /* بوکه‌ی پیش‌زمینه در فضای صفحه */
@@ -1673,6 +1740,14 @@
     g.scale(K, K);
 
     if (backdrop) g.drawImage(backdrop, BX0, BY0, BW, BH);
+    /* رنگ‌مایه‌ی شهر: هر شهر حالِ آسمان خودش را دارد */
+    if (cityTint) {
+      g.save();
+      g.globalAlpha = .34;
+      g.fillStyle = cityTint;
+      g.fillRect(BX0, BY0, BW, GY - BY0);
+      g.restore();
+    }
     skyWash(g, dawn);
     drawBirds(g, T);
 
@@ -1698,8 +1773,10 @@
     drawVehicles(g, T);
     drawRipples(g);
     drawFog(g, T);
+    drawHeavyFog(g, T);
     drawWalkers(g, true, T);
     drawRain(g);
+    drawSnow(g);
 
     g.restore();
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -1708,8 +1785,8 @@
   function render(T, W) {
     if (!ctx) return;
     var t0 = performance.now();
-    var dawn = 1 - (NF - .28) / .72;
-    dawn = clamp((1 - NF) / .72, 0, 1);
+    /* هرچه NF کمتر، روز روشن‌تر — همان عددی که آسمان را می‌شوید */
+    var dawn = clamp((1 - NF) / .78, 0, 1);
 
     var useBloom = quality >= 2 && frameBuf;
     var g = useBloom ? fctx : ctx;
@@ -1913,6 +1990,7 @@
     sparks.length = 0; drops.length = 0; smoke.length = 0; ripples.length = 0;
     custs.length = 0; walkers.length = 0; vehicles.length = 0;
     birds.length = 0; cats.length = 0; crewLook.length = 0;
+    flakes.length = 0; fogOn = 0;
     rainUntil = 0; flash = 0; giftT = 18;
   }
 

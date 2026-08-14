@@ -34,6 +34,17 @@
   color:#241604;font-size:13px;font-weight:800}
 .ghost:active,.solid:active{transform:translateY(2px)}
 
+/* ── هوای امشب در کارت شیفت ── */
+.wxrow{
+  display:flex;align-items:center;gap:11px;padding:11px 13px;margin-bottom:11px;
+  border-radius:14px;background:linear-gradient(180deg,#1a2434,#121824);
+  border:1px solid var(--line2);
+}
+.wxrow svg{width:26px;height:26px;flex:none;fill:none;stroke:var(--gold-l);
+  stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.wxrow b{display:block;font-size:12.5px}
+.wxrow i{display:block;font-style:normal;font-size:10.5px;color:var(--dim);margin-top:2px;line-height:1.6}
+
 /* ── پیش‌بینی شیفت ── */
 .forecast{
   display:flex;justify-content:space-between;align-items:center;gap:8px;
@@ -68,6 +79,72 @@
 .fxchip{font-size:9.5px;padding:2px 7px;border-radius:6px;background:#0d1523;border:1px solid var(--line);color:var(--dim2)}
 .fxchip.pos{color:var(--green);border-color:rgba(99,192,122,.3)}
 .fxchip.neg{color:var(--red);border-color:rgba(224,96,74,.3)}
+
+/* ── تأیید خرید ── */
+.pcard{
+  width:min(360px,100%);border-radius:var(--r-xl);padding:20px;
+  background:linear-gradient(180deg,#1c2436,#0c111b);border:1px solid var(--line2);
+  box-shadow:var(--sh-3);animation:popIn .34s var(--ease);
+}
+.pc-top{text-align:center;margin-bottom:16px}
+.pc-badge{
+  display:inline-block;margin-bottom:9px;padding:3px 10px;border-radius:7px;
+  font-size:9.5px;font-weight:700;letter-spacing:.5px;
+  background:repeating-linear-gradient(-45deg,#3a3316 0 8px,#2e290f 8px 16px);
+  border:1px dashed #7a6628;color:#e8d59a;
+}
+.pc-top b{display:block;font-size:19px}
+.pc-give{
+  display:grid;gap:7px;padding:13px;border-radius:14px;margin-bottom:14px;
+  background:#0c111d;border:1px dashed var(--line2);
+}
+.pc-row{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.pc-ic{
+  width:28px;height:28px;flex:none;border-radius:9px;display:grid;place-items:center;
+  background:#151d2e;border:1px solid var(--line2);
+}
+.pc-ic svg{width:15px;height:15px;fill:none;stroke:var(--gold);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pc-pricerow{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:12px 14px;border-radius:14px;margin-bottom:15px;
+  background:var(--pan3);border:1px solid var(--line2);font-size:12px;color:var(--dim);
+}
+.pc-pricerow b{font-size:16px;color:var(--ink)}
+
+/* ── داوطلب تازه ── */
+.hirecard{
+  position:relative;width:min(300px,100%);border-radius:var(--r-xl);
+  padding:26px 20px 22px;text-align:center;overflow:hidden;
+  background:linear-gradient(180deg,#212a3e,#0d1119);
+  border:1px solid var(--line2);box-shadow:var(--sh-3);
+  animation:popIn .38s var(--spring);
+}
+.hirecard.g1{border-color:#3f6f9e}
+.hirecard.g2{border-color:var(--gold-d)}
+.hc-ray{
+  position:absolute;top:-40%;left:50%;width:220px;height:220px;margin-left:-110px;
+  border-radius:50%;background:radial-gradient(circle,rgba(140,160,200,.22),transparent 65%);
+}
+.hirecard.g1 .hc-ray{background:radial-gradient(circle,rgba(99,164,224,.28),transparent 65%)}
+.hirecard.g2 .hc-ray{
+  background:radial-gradient(circle,rgba(233,185,106,.34),transparent 65%);
+  animation:giftPulse 1.6s ease-in-out infinite;
+}
+.hc-ic{
+  position:relative;width:64px;height:64px;margin:0 auto 12px;border-radius:20px;
+  display:grid;place-items:center;
+  background:radial-gradient(circle at 34% 24%,#31415f,#141c2b);
+  border:1px solid var(--line2);
+}
+.hirecard.g2 .hc-ic{border-color:var(--gold-d)}
+.hc-ic svg{width:32px;height:32px;fill:none;stroke:var(--gold);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.hc-grade{
+  position:relative;display:inline-block;margin-bottom:6px;padding:2px 11px;
+  border-radius:7px;font-size:10px;font-weight:800;
+  background:#0d1220;border:1px solid var(--line2);
+}
+.hirecard h3{position:relative;margin:0 0 7px;font-size:20px}
+.hirecard p{position:relative;margin:0;font-size:11.5px;color:var(--dim);line-height:1.85}
 
 /* ── کادو ── */
 .giftcard{
@@ -117,6 +194,15 @@
 .r-row .k{flex:1;min-width:0}
 .r-row.neg .num{color:#a13a22}
 .r-row.pos .num{color:#2f6d3b}
+/* تفکیک ساعت‌های شب روی فاکتور */
+.r-bands{margin:10px 0;padding:9px 11px;background:#e7ddc9;border-radius:5px}
+.rb-t{font-size:10.5px;color:#6f6350;margin-bottom:7px;text-align:center}
+.rb-row{display:flex;align-items:center;gap:7px;font-size:11px;margin-bottom:4px;color:#4c4231}
+.rb-row>span:first-child{flex:none;width:52px}
+.rb-bar{flex:1;height:5px;border-radius:99px;background:#d3c7ad;overflow:hidden}
+.rb-bar i{display:block;height:100%;background:#8a6a3a;border-radius:99px}
+.rb-row .num{flex:none;width:30px;text-align:end;color:#6f6350}
+
 .r-note{margin:10px 0;padding:9px 11px;background:#e7ddc9;border-radius:5px;font-size:11.5px;line-height:1.9;color:#4c4231}
 .r-total{display:flex;justify-content:space-between;padding-top:10px;border-top:2px dashed #b9ad95;font-weight:800;font-size:16px}
 .r-btns{display:grid;gap:7px;margin-top:15px}

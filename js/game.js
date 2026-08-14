@@ -46,21 +46,25 @@
     afterChange();
   }
 
+  /* استخدام: یک داوطلب می‌آید، بازیکن می‌بیند چه کسی گیرش آمد */
   function hire(btn) {
     var c = St.hireCost();
     if (S().money < c) { AU.sfx.no(); return; }
     S().money -= c; disp = S().money;
-    S().hired++;
-    AU.sfx.buy(); U.buzz(10); U.flyCoins(btn, 4);
-    U.toast('یک نفر اضافه شد. بگذارش روی یک ایستگاه.', 'good');
+    var cand = A.staff.candidate(S().tier);
+    St.addStaff(cand);
+    U.flyCoins(btn, 4);
+    var g = A.staff.grade(cand.g);
+    if (cand.g >= 2) { AU.sfx.win(); U.buzz([14, 40, 14, 40, 14]); Sc.punch(.7); }
+    else if (cand.g === 1) { AU.sfx.badge(); U.buzz([10, 30, 10]); }
+    else { AU.sfx.buy(); U.buzz(10); }
+    UI.showHire(cand);
     afterChange();
   }
 
-  function assignCrew(id, d) {
-    if (St.IDS.indexOf(id) < 0) return;
-    if (d > 0 && (St.crewFree() <= 0 || S().crew[id] >= St.crewNeed(id))) { AU.sfx.no(); return; }
-    if (d < 0 && S().crew[id] <= 0) return;
-    S().crew[id] += d;
+  /* جابه‌جا کردن یک کارمند مشخص */
+  function assignStaff(index, stationId) {
+    if (!St.assignStaff(index, stationId)) { AU.sfx.no(); return; }
     AU.sfx.open(); U.buzz(6);
     afterChange();
   }
@@ -150,13 +154,97 @@
   }
 
   /* ═════════ فروشگاه ═════════ */
-  function buyGemPack(id) {
-    var p = D.GEM_PACKS.find(function (x) { return x.id === id; });
-    if (!p) return;
-    UI.showBuyNotice(p);
+
+  /* هر بسته چه چیزهایی می‌دهد — به زبان آدمیزاد، برای کارت تأیید */
+  function packContents(item) {
+    var g = item.give || (item.gems ? { gems: item.gems } : {});
+    var out = [];
+    if (g.gems) out.push({ icon: 'gem', text: fa(g.gems) + ' فیروزه' });
+    if (g.gemsPerDay) out.push({ icon: 'gem', text: 'روزی ' + fa(g.gemsPerDay) + ' فیروزه، ' + fa(g.days) + ' روز' });
+    if (g.incomeHours) out.push({ icon: 'coin', text: fa(g.incomeHours) + ' ساعت درآمد (' + money(St.rate() * 3600 * g.incomeHours) + ')' });
+    if (g.staff) out.push({ icon: 'crew', text: fa(g.staff) + ' نیروی ' + (g.staffGrade || 'عادی') });
+    if (g.space) out.push({ icon: 'space', text: fa(g.space) + ' جای دائمی' });
+    if (g.abroo) out.push({ icon: 'abroo', text: fa(g.abroo) + ' آبرو' });
+    if (g.noAds) out.push({ icon: 'noads', text: 'حذف همیشگی تبلیغ اجباری' });
+    return out;
+  }
+
+  /* رساندن محتویات بسته */
+  function grantPack(item) {
+    var g = item.give || (item.gems ? { gems: item.gems } : {});
+    var lines = [];
+
+    if (g.gems) { St.addGems(g.gems); lines.push('+' + fa(g.gems) + ' فیروزه'); }
+    if (g.incomeHours) {
+      var cash = Math.max(5000, St.rate() * 3600 * g.incomeHours);
+      S().money += cash; S().total += cash; disp = S().money;
+      Sc.spawnCoin(cash, true);
+      lines.push('+' + money(cash));
+    }
+    if (g.staff) {
+      var wantG = g.staffGrade === 'استاد' ? 2 : (g.staffGrade === 'ماهر' ? 1 : 0);
+      for (var si = 0; si < g.staff; si++) St.addStaff(A.staff.candidate(S().tier, wantG));
+      lines.push('+' + fa(g.staff) + ' ' + (g.staffGrade || 'نیرو'));
+    }
+    if (g.space) { M().spaceBonus = (M().spaceBonus || 0) + g.space; lines.push('+' + fa(g.space) + ' جا'); }
+    if (g.abroo) { M().abroo += g.abroo; M().abrooTotal += g.abroo; lines.push('+' + fa(g.abroo) + ' آبرو'); }
+    if (g.noAds) { M().noAds = 1; lines.push('تبلیغ حذف شد'); }
+    if (g.days) {
+      /* اشتراک: از الان به مدت n روز */
+      var base = Math.max(Date.now(), M().subUntil || 0);
+      M().subUntil = base + g.days * 86400e3;
+      M().subDay = '';   /* همان روز اول هم بتواند بگیرد */
+      lines.push(fa(g.days) + ' روز صندوق روزانه');
+    }
+
+    if (item.once || item.sub) St.recordPurchase(item.id);
+
+    AU.sfx.win(); U.buzz([14, 40, 14, 40, 14]);
+    Sc.punch(.8);
+    U.toast('رسید: ' + lines.join(' · '), 'good');
+    afterChange();
+  }
+
+  /* خرید — از لایه‌ی پرداخت رد می‌شود تا روز وصل کردن بازار
+     فقط billing.js عوض شود */
+  function buyPack(id) {
+    var item = D.GEM_PACKS.find(function (x) { return x.id === id; }) ||
+      D.BUNDLES.find(function (x) { return x.id === id; });
+    if (!item) return;
+    if (item.once && St.hasPurchase(item.id)) {
+      AU.sfx.no(); U.toast('این بسته را قبلاً گرفته‌ای.', 'bad'); return;
+    }
+    A.billing.buy(item, function () {
+      grantPack(item);
+    }, function (why) {
+      if (why) { AU.sfx.no(); U.toast(why, 'bad'); }
+    });
+  }
+
+  /* صندوق روزانه‌ی اشتراک */
+  function claimSubChest() {
+    var n = St.claimSubChest();
+    if (!n) { AU.sfx.no(); return; }
+    AU.sfx.win(); U.buzz([12, 30, 12]);
+    U.flyCoins($('subChestBtn'), 6);
+    U.toast('صندوق امروز: +' + fa(n) + ' فیروزه', 'good');
+    afterChange();
   }
 
   function watchAdForGems() {
+    /* اگر تبلیغ را خریده حذف کند، جایزه‌اش را رایگان می‌گیرد */
+    if (St.adsDisabled()) {
+      if (!St.useAd()) {
+        U.toast('سهمیه‌ی امروز تمام شد. فردا دوباره پر می‌شود.', 'bad');
+        AU.sfx.no();
+        return;
+      }
+      St.addGems(2);
+      AU.sfx.win(); U.buzz([10, 30, 10]);
+      U.toast('+۲ فیروزه (بدون تبلیغ)', 'good');
+      afterChange();
+      return;
+    }
     if (!St.useAd()) {
       U.toast('سهمیه‌ی امروز تمام شد. فردا دوباره پر می‌شود.', 'bad');
       AU.sfx.no();
@@ -168,9 +256,31 @@
     afterChange();
   }
 
+  /* اجناسی که واقعاً پیاده‌سازی شده‌اند. اگر جنسی به data اضافه شود
+     و اینجا جا بماند، بدون این نگهبان الماس بازیکن دود می‌شد. */
+  var ITEM_HANDLERS = ['cash1', 'boost', 'crew', 'abroo', 'space', 'integ', 'sleep'];
+
   function buyItem(id, btn) {
     var it = D.SHOP_ITEMS.find(function (x) { return x.id === id; });
     if (!it) return;
+    if (ITEM_HANDLERS.indexOf(id) < 0) {
+      AU.sfx.no();
+      U.toast('این جنس هنوز آماده نیست.', 'bad');
+      return;
+    }
+    /* تقویت وقتی مغازه بسته است می‌سوزد — نرخ شب قفل شده و
+       درآمد جاری هم وجود ندارد */
+    if (id === 'boost' && St.isClosed()) {
+      AU.sfx.no();
+      U.toast('مغازه بسته است؛ تقویت الکی می‌سوزد. اول باز کن.', 'bad');
+      return;
+    }
+    /* اگر همین حالا سرِ اوج است، خریدنش پول دور ریختن است */
+    if (id === 'sleep' && S().hour >= 17 && S().hour < 24) {
+      AU.sfx.no();
+      U.toast('همین الان سرِ شب است. لازم نیست.', 'bad');
+      return;
+    }
     if (!St.spendGems(it.gems)) {
       AU.sfx.no();
       U.toast('الماس کافی نداری.', 'bad');
@@ -189,10 +299,12 @@
         U.toast('نیم ساعت درآمد دو برابر شد.', 'good');
         Sc.punch(.7);
         break;
-      case 'crew':
-        S().hired++;
-        U.toast('یک نیروی تازه آمد.', 'good');
+      case 'crew': {
+        var c2 = A.staff.candidate(S().tier, 1);   /* دست‌کم ماهر */
+        St.addStaff(c2);
+        UI.showHire(c2);
         break;
+      }
       case 'abroo':
         M().abroo += 3; M().abrooTotal += 3;
         U.toast('+۳ آبرو', 'good');
@@ -200,6 +312,11 @@
       case 'space':
         M().spaceBonus = (M().spaceBonus || 0) + 5;
         U.toast('پنج جای دائمی اضافه شد.', 'good');
+        break;
+      case 'sleep':
+        S().hour = 18;
+        Sc.punch(.6);
+        U.toast('خوابیدی و بیدار شدی. غروب است.', 'good');
         break;
       case 'integ':
         St.applyInteg(20);
@@ -285,8 +402,9 @@
     if (fromScene) Sc.burst(wx, wy, 7, '#ffd68f');
     var f = $('serveBtn');
     f.classList.remove('hit'); void f.offsetWidth; f.classList.add('hit');
-    if (heat > .97) St.checkBadges({ heat: heat });
-    UI.syncHUD(disp, heat);
+    /* نشان «دستِ داغ» قبلاً بی‌صدا داده می‌شد: نه پیامی، نه ذخیره‌ای */
+    if (heat > .97 && !St.hasBadge('combo')) afterChange();
+    else UI.syncHUD(disp, heat);
   }
 
   /* ═════════ سفارش ویژه ═════════ */
@@ -326,6 +444,9 @@
   }
   function claimGoal() {
     if (!goal || !goal.done) { AU.sfx.no(); return; }
+    /* جایزه با نرخ لحظه‌ی گرفتن حساب می‌شود، نه لحظه‌ی ساخته شدن.
+       وگرنه اگر بازیکن وسط سفارش رشد می‌کرد، جایزه بی‌ارزش می‌شد. */
+    goal.reward = Math.max(goal.reward, St.rate() * E.goalWindow);
     S().money += goal.reward; S().total += goal.reward;
     S().goalsDone = (S().goalsDone || 0) + 1;
     St.applyInteg(1);
@@ -399,11 +520,21 @@
   function updateForecast() {
     var p = readShiftPick();
     var ing = D.ING[p.ing];
-    var perHour = St.rate() * 3600 * E.closedRate * ing.out * (1 + .18 * St.book('night'));
+    /* پیش‌بینی برای هشت ساعت آینده، با میانگین تقاضای همان بازه */
+    var demand = A.clock.demandOver(S().hour, 8);
+    var base = St.rawRate() * St.boostMult() * demand;
+    var perHour = base * 3600 * E.closedRate * ing.out * (1 + .18 * St.book('night'));
     var netHour = Math.max(0, perHour - perHour * ing.cost - S().hired * St.wage() / 8);
     $('fcNet').textContent = money(netHour);
     /* «اصالت −۱» به بازیکن هیچ نمی‌گفت. حالا می‌گوید کجا می‌نشیند. */
     $('fcInteg').textContent = 'می‌نشیند روی ' + fa(ing.target);
+    /* هوای امشب — روی انتخاب مواد اثر دارد */
+    var wx = St.weather(), fw = $('fcWx');
+    if (fw && wx) {
+      fw.querySelector('svg').innerHTML = wx.icon;
+      fw.querySelector('b').textContent = wx.name;
+      fw.querySelector('i').textContent = wx.note;
+    }
   }
   function openShiftPlan() {
     if (anyModal()) return;
@@ -424,8 +555,10 @@
     S().ing = p.ing; S().risk = p.risk;
     S().closedAt = Date.now();
     /* نرخ همان لحظه‌ی بستن قفل می‌شود. وگرنه می‌شد ده ساعت بسته گذاشت،
-       بعد درست قبل از باز کردن «شب شلوغ» خرید و کل شب را دو برابر کرد. */
-    S().closedRate = St.rate();
+       بعد درست قبل از باز کردن «شب شلوغ» خرید و کل شب را دو برابر کرد.
+       نرخ پایه ذخیره می‌شود — تقاضا بعداً روی کل بازه میانگین گرفته می‌شود. */
+    S().closedRate = St.rawRate() * St.boostMult();
+    S().closedHour = S().hour;
     $('shiftVeil').hidden = true;
     heat = 0;
     Sc.reset();
@@ -437,10 +570,14 @@
   /* باز کردن: هرچه از لحظه‌ی بستن گذشته حساب می‌شود */
   function openShop() {
     if (!St.isClosed()) return;
-    var hours = clamp((Date.now() - S().closedAt) / 3600e3, 0, E.closedCap);
-    var lockedRate = S().closedRate > 0 ? S().closedRate : St.rate();
+    var realHours = (Date.now() - S().closedAt) / 3600e3;
+    var hours = clamp(realHours, 0, E.closedCap);
+    var lockedRate = S().closedRate > 0 ? S().closedRate : St.rawRate() * St.boostMult();
+    var startHour = S().closedHour;
     S().closedAt = 0;
     S().closedRate = 0;
+    /* ساعت بازی به اندازه‌ی زمان واقعیِ بسته بودن جلو می‌رود */
+    S().hour = A.clock.advanceAway(startHour, realHours * 3600);
     S().openedAt = Date.now();
     AU.sfx.open();
     if (hours * 3600 < 8) {
@@ -448,18 +585,22 @@
       afterChange();
       return;
     }
-    runShift(hours, true, lockedRate);
+    runShift(hours, true, lockedRate, startHour);
   }
 
   /* ═════════ حساب شب ═════════ */
-  function runShift(hours, wasClosed, rateOverride) {
+  function runShift(hours, wasClosed, rateOverride, startHour) {
     hours = clamp(Number(hours) || 0, 0, E.closedCap);
     if (hours <= 0 || !St.spaceUsed()) return;
     var ing = D.ING[S().ing], rk = D.RISK[S().risk];
     var luck = wasClosed ? (rk.lo + Math.random() * (rk.hi - rk.lo)) : 1;
     var eff = wasClosed ? E.closedRate * (1 + .18 * St.book('night')) : E.openOfflineRate;
-    var useRate = rateOverride > 0 ? rateOverride : St.rate();
-    var gross = useRate * 3600 * hours * eff * ing.out * luck;
+    /* نرخ پایه (بدون تقاضا) × میانگین تقاضای همان بازه‌ی ساعت */
+    var baseRate = rateOverride > 0 ? rateOverride : St.rawRate() * St.boostMult();
+    var startH = startHour == null ? S().hour : startHour;
+    var demand = A.clock.demandOver(startH, hours);
+    var bands = A.clock.breakdown(startH, hours);
+    var gross = baseRate * demand * 3600 * hours * eff * ing.out * luck;
     var ingCost = gross * ing.cost;
     var wages = S().hired * St.wage() * (hours / 8);
     var net = Math.max(0, gross - ingCost - wages);
@@ -475,6 +616,7 @@
       closed: wasClosed, day: S().day, tierName: St.tier().name, ing: S().ing,
       gross: gross, ingCost: ingCost, wages: wages, net: net, luck: luck,
       hired: S().hired, note: note, hours: hours,
+      bands: bands, demand: demand, startHour: startH,
       adReady: hours * 60 >= E.adMinMinutes
     }, onAd, onReceiptOk, onCopy);
     AU.sfx.print();
@@ -575,6 +717,10 @@
 
     heat = Math.max(0, heat - dt * .3);
 
+    /* ساعت بازی جلو می‌رود — حتی وقتی مغازه بسته است، شب می‌گذرد.
+       فقط پشت مودال می‌ایستد تا بازیکن وسط تصمیم ضرر نکند. */
+    if (open) S().hour = A.clock.advance(S().hour, dt);
+
     var r = St.rate();
     if (open && !closed) {
       S().money += r * dt;
@@ -602,7 +748,9 @@
     var W = {
       rate: closed ? 0 : r, tier: clamp(S().tier | 0, 0, D.TIERS.length - 1),
       lvl: S().lvl, crew: closed ? 0 : St.crewUsed(), heat: heat,
-      closed: closed,
+      closed: closed, hour: S().hour,
+      weather: (St.weather() || {}).id || 'clear',
+      cityTint: (St.city() || {}).tint || null,
       brandLit: S().lvl.brand > 0 || S().tier >= 3
     };
     Sc.update(dt, T, W);
@@ -640,15 +788,18 @@
     var away = clamp((Date.now() - hiddenAt) / 1000, 0, 24 * 3600);
     hiddenAt = 0;
     if (St.isClosed()) return;            /* بسته بوده؛ موقع باز کردن حساب می‌شود */
+    /* ساعت بازی به اندازه‌ی زمان واقعی جلو می‌رود */
+    var startH = S().hour;
+    S().hour = A.clock.advanceAway(startH, away);
     if (away < 25 || !St.spaceUsed()) return;
     var hours = clamp(away / 3600, 0, E.openOfflineCap);
     if (away < 240) {
-      var g = St.rate() * away * E.openOfflineRate;
+      var g = St.rawRate() * St.boostMult() * A.clock.demandOver(startH, away / 3600) * away * E.openOfflineRate;
       S().money += g; S().total += g;
-      U.toast('در نبودت ' + money(g) + ' تومان جمع شد.', 'good');
+      U.toast('در نبودت ' + money(g) + ' ایر جمع شد.', 'good');
       afterChange();
     } else if (!anyModal()) {
-      runShift(hours, false);
+      runShift(hours, false, 0, startH);
     }
   }
 
@@ -757,7 +908,9 @@
     } else if (St.isClosed()) {
       U.toast('مغازه بسته است. برای باز کردن، دکمه‌ی پایین را بزن.');
     } else if (awaySec > 240 && St.spaceUsed()) {
-      runShift(clamp(awaySec / 3600, 0, E.openOfflineCap), false);
+      var sh = S().hour;
+      S().hour = A.clock.advanceAway(sh, awaySec);
+      runShift(clamp(awaySec / 3600, 0, E.openOfflineCap), false, 0, sh);
     } else {
       U.toast('برگشتی. مغازه باز است.');
     }
@@ -773,12 +926,13 @@
 
   A.game = {
     start: start,
-    buyStation: buyStation, hire: hire, assignCrew: assignCrew, autoCrew: autoCrew,
+    buyStation: buyStation, hire: hire, assignStaff: assignStaff, autoCrew: autoCrew,
     upgradeTier: upgradeTier, buyBook: buyBook, prestige: prestige, hardReset: hardReset,
     serve: serve, claimGoal: claimGoal, fireEvent: fireEvent, runShift: runShift,
     openShiftPlan: openShiftPlan, closeShop: closeShop, openShop: openShop,
     triggerEnding: triggerEnding,
-    buyGemPack: buyGemPack, buyItem: buyItem, watchAdForGems: watchAdForGems,
+    buyPack: buyPack, packContents: packContents, claimSubChest: claimSubChest,
+    buyItem: buyItem, watchAdForGems: watchAdForGems,
     tapGift: tapGift, claimGift: claimGift, claimGiftTripled: claimGiftTripled,
     debug: {
       grant: function (v) { S().money += v; S().total += v; disp = S().money; afterChange(); },

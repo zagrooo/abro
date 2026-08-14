@@ -7,11 +7,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="description" content="آبرو — از یک چرخ دستی تا یک زنجیره. بازی مدیریتی درباره‌ی اینکه سر راه چقدر از خودت را جا می‌گذاری.">
 <title>آبرو</title>
-<link rel="stylesheet" href="css/fonts.css?v=2.3.0">
-<link rel="stylesheet" href="css/base.css?v=2.3.0">
-<link rel="stylesheet" href="css/loader.css?v=2.3.0">
-<link rel="stylesheet" href="css/ui.css?v=2.3.0">
-<link rel="stylesheet" href="css/modals.css?v=2.3.0">
+<link rel="stylesheet" href="css/fonts.css?v=2.8.0">
+<link rel="stylesheet" href="css/base.css?v=2.8.0">
+<link rel="stylesheet" href="css/loader.css?v=2.8.0">
+<link rel="stylesheet" href="css/ui.css?v=2.8.0">
+<link rel="stylesheet" href="css/modals.css?v=2.8.0">
 </head>
 <body>
 
@@ -64,8 +64,40 @@
     <div class="ld-meta"><span id="ldStep">شروع</span><b id="ldPct">۰٪</b></div>
     <div class="ld-tip" id="ldTip">—</div>
   </div>
-  <div class="ld-ver">نسخه‌ی ۲٫۳٫۰</div>
+  <div class="ld-ver">نسخه‌ی ۲٫۸٫۰</div>
 </div>
+
+<noscript>
+  <div class="fatal">
+    <b>جاوااسکریپت خاموش است</b>
+    <p>آبرو بدون جاوااسکریپت اجرا نمی‌شود. در تنظیمات مرورگر روشنش کن و صفحه را دوباره باز کن.</p>
+  </div>
+</noscript>
+
+<script>
+/* تور نجات مستقل از بقیه‌ی کد:
+   اگر یکی از فایل‌های اسکریپت اصلاً بار نشود یا موقع تجزیه خطا بدهد،
+   start() هرگز اجرا نمی‌شود و تور نجات داخل loader.js هم فعال نمی‌شود.
+   آن وقت بازیکن تا ابد صفحه‌ی بارگذاری را می‌بیند بدون هیچ توضیحی. */
+(function () {
+  var firstError = null;
+  window.addEventListener('error', function (e) {
+    if (!firstError) firstError = (e && e.message) || 'خطای ناشناخته';
+  });
+  setTimeout(function () {
+    var ld = document.getElementById('loader');
+    if (!ld || ld.hidden || ld.classList.contains('gone')) return;
+    var ready = window.ABRO && window.ABRO.game;
+    var box = document.createElement('div');
+    box.className = 'ld-fatal';
+    box.innerHTML = '<b>بازی بالا نیامد</b><p>' +
+      (ready ? 'بارگذاری بیش از حد طول کشید.' : 'یکی از فایل‌های بازی بار نشد.') +
+      '</p>' + (firstError ? '<code>' + String(firstError).slice(0, 160) + '</code>' : '') +
+      '<button onclick="location.reload()">دوباره امتحان کن</button>';
+    ld.appendChild(box);
+  }, 20000);
+})();
+</script>
 
 <!-- ═══════════ دستگاه ═══════════ -->
 <div id="device">
@@ -94,6 +126,16 @@
     <!-- نوار پرده -->
     <div class="ribbon">
       <div class="actbox">
+        <div class="clockrow">
+          <span class="ck-time" id="ckTime">۱۹:۰۰</span>
+          <span class="ck-mood" id="ckMood">اوج شب</span>
+          <span class="ck-wx" id="ckWx" title="هوا"><svg viewBox="0 0 24 24"></svg><b>—</b></span>
+          <span class="ck-date" id="ckDate">—</span>
+        </div>
+        <div class="occbar" id="occBar" hidden>
+          <span class="oc-ic"><svg viewBox="0 0 24 24"></svg></span>
+          <b id="occName">—</b><i id="occNote">—</i><span class="oc-mul" id="occMul">—</span>
+        </div>
         <div class="r1"><b id="shopName">چرخ پدر</b><span class="num" id="actLbl">پرده‌ی ۱/۱۲</span></div>
         <div class="track act" id="actTrack"><i id="actProg" style="width:0%"></i></div>
         <div class="r1 r2"><span>اصالت <b id="integVal">۷۰</b></span><span class="num" id="integMul">×۱</span></div>
@@ -201,6 +243,10 @@
     <div class="opts" id="ingOpts"></div>
     <p class="lbl">ریسک شب</p>
     <div class="opts" id="riskOpts"></div>
+    <div class="wxrow" id="fcWx">
+      <svg viewBox="0 0 24 24"></svg>
+      <span><b>—</b><i>—</i></span>
+    </div>
     <div class="forecast">
       <span>خالص هر ساعت بسته بودن</span>
       <span><b id="fcNet">۰</b> · اصالت <span id="fcInteg">—</span></span>
@@ -230,6 +276,7 @@
   <div class="receipt">
     <div class="r-head"><b id="rcTitle">گزارش شب</b><span id="rcSub">شب ۱</span></div>
     <div id="rcRows"></div>
+    <div class="r-bands" id="rcBands" hidden></div>
     <div class="r-note" id="rcNote"></div>
     <div class="r-total"><span>خالص شب</span><span class="num" id="rcNet">۰</span></div>
     <div class="r-btns">
@@ -237,6 +284,17 @@
       <button class="gh" id="rcCopy">کپی برای فرستادن</button>
       <button id="rcOk">باز کردن مغازه</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ داوطلب تازه ═══ -->
+<div class="veil" id="hireVeil" hidden role="dialog" aria-modal="true">
+  <div class="hirecard">
+    <div class="hc-ray"></div>
+    <div class="hc-ic"></div>
+    <div class="hc-grade" id="hcGrade">عادی</div>
+    <h3 id="hcRole">شاگرد</h3>
+    <p id="hcDesc">—</p>
   </div>
 </div>
 
@@ -264,6 +322,22 @@
         <svg viewBox="0 0 24 24"><path d="M4 5h16v11H4z"/><path d="M10 8.5l4 2.5-4 2.5z"/><path d="M9 20h6"/></svg>
         <span>تبلیغ ببین، سه برابر</span><b id="giftThree">—</b>
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ تأیید خرید ═══ -->
+<div class="veil" id="pcVeil" hidden role="dialog" aria-modal="true">
+  <div class="pcard">
+    <div class="pc-top">
+      <span class="pc-badge" id="pcTest" hidden>حالت آزمایشی</span>
+      <b id="pcName">—</b>
+    </div>
+    <div class="pc-give" id="pcGive"></div>
+    <div class="pc-pricerow"><span>مبلغ</span><b id="pcPrice">—</b></div>
+    <div class="row2">
+      <button class="ghost" id="pcNo">بی‌خیال</button>
+      <button class="solid" id="pcOk">تأیید خرید</button>
     </div>
   </div>
 </div>
@@ -319,13 +393,17 @@
 })();
 </script>
 
-<script src="js/util.js?v=2.3.0"></script>
-<script src="js/audio.js?v=2.3.0"></script>
-<script src="js/data.js?v=2.3.0"></script>
-<script src="js/state.js?v=2.3.0"></script>
-<script src="js/scene.js?v=2.3.0"></script>
-<script src="js/loader.js?v=2.3.0"></script>
-<script src="js/ui.js?v=2.3.0"></script>
-<script src="js/game.js?v=2.3.0"></script>
+<script src="js/util.js?v=2.8.0"></script>
+<script src="js/billing.js?v=2.8.0"></script>
+<script src="js/audio.js?v=2.8.0"></script>
+<script src="js/data.js?v=2.8.0"></script>
+<script src="js/clock.js?v=2.8.0"></script>
+<script src="js/world.js?v=2.8.0"></script>
+<script src="js/staff.js?v=2.8.0"></script>
+<script src="js/state.js?v=2.8.0"></script>
+<script src="js/scene.js?v=2.8.0"></script>
+<script src="js/loader.js?v=2.8.0"></script>
+<script src="js/ui.js?v=2.8.0"></script>
+<script src="js/game.js?v=2.8.0"></script>
 </body>
 </html>

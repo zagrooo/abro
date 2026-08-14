@@ -167,6 +167,145 @@
      کل طراحی روی آن بنا شده. با ۱٫۱۵ فضا هیچ‌وقت پر نمی‌شد. */
   var COST_GROWTH = 1.055;
 
+  /* ═══════════════════════════════════════════════
+     ساعت و منحنی تقاضا
+
+     دو سرعت زمان:
+       داخل بازی → ۱ دقیقه‌ی واقعی = ۱ ساعت بازی (روز = ۲۴ دقیقه)
+       بیرون بازی → ۱ ساعت واقعی = ۱ ساعت بازی
+
+     سحر (۰۳ تا ۰۷) چهار برابر سریع می‌گذرد تا بازیکن وسط جلسه
+     چهار دقیقه‌ی واقعی در ساعت مرده گیر نکند.
+
+     میانگین وزنی منحنی دقیقاً ۱٫۰۰ است، پس درآمد کل شبانه‌روز
+     با قبل فرقی نمی‌کند و بالانس دست نمی‌خورد.
+     ═══════════════════════════════════════════════ */
+  var CLOCK = {
+    minutesPerGameHour: 1,     /* داخل بازی */
+    dawnStart: 3, dawnEnd: 7,  /* بازه‌ی سریع */
+    dawnSpeed: 4               /* چند برابر سریع‌تر */
+  };
+
+  /* from: ساعت شروع، mul: ضریب تقاضا، name: چه وقتی است */
+  var DEMAND = [
+    { from: 18, mul: 1.65, name: 'اوج شب', mood: 'peak' },
+    { from: 0, mul: 1.10, name: 'آخر شب', mood: 'late' },
+    { from: 3, mul: 0.38, name: 'سحر', mood: 'dead' },
+    { from: 7, mul: 0.66, name: 'صبحانه', mood: 'morning' },
+    { from: 12, mul: 1.21, name: 'ناهار', mood: 'lunch' },
+    { from: 15, mul: 0.77, name: 'عصرانه', mood: 'afternoon' }
+  ];
+
+  /* ═══════════════════════════════════════════════
+     آب‌وهوا
+
+     هوا فقط تزئین نیست — هر کدام ایستگاه‌ها را جور دیگری می‌چرخاند.
+     mul: ضریب کلی تقاضا
+     st:  ضریب ایستگاه‌های خاص
+     ═══════════════════════════════════════════════ */
+  var WEATHER = {
+    clear: {
+      id: 'clear', name: 'صاف', mul: 1, st: {}, w: 42,
+      note: 'شب صاف. همه‌چیز عادی.',
+      icon: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'
+    },
+    rain: {
+      id: 'rain', name: 'باران', mul: .72, st: { peyk: 2.1, fleet: 1.6 }, w: 18,
+      note: 'خیابان خالی شد، ولی تلفن از صبح قطع نمی‌شود.',
+      icon: '<path d="M6 14a4 4 0 0 1 .8-7.9 5.5 5.5 0 0 1 10.5 1.6A3.5 3.5 0 0 1 17 14z"/><path d="M8 18l-1 3M12 18l-1 3M16 18l-1 3"/>'
+    },
+    cold: {
+      id: 'cold', name: 'سرما', mul: .88, st: { stove: 1.5, kitchen: 1.35 }, w: 14,
+      note: 'سوز می‌آید. هرکس رد می‌شود یک چیز داغ می‌خواهد.',
+      icon: '<path d="M12 2v20M4 6l16 12M20 6L4 18"/><path d="M12 6l-2-2M12 6l2-2M12 18l-2 2M12 18l2 2"/>'
+    },
+    hot: {
+      id: 'hot', name: 'گرما', mul: .8, st: { counter: 1.45, packing: 1.3 }, w: 12,
+      note: 'هوا سنگین است. کسی دیگ داغ نمی‌خواهد، فقط خنکی.',
+      icon: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><path d="M5 19h14"/>'
+    },
+    fog: {
+      id: 'fog', name: 'مه', mul: .84, st: { brand: 1.3 }, w: 9,
+      note: 'مه نشسته روی کوچه. تابلو از دور بهتر دیده می‌شود.',
+      icon: '<path d="M3 8h18M5 12h14M3 16h18M7 20h10"/>'
+    },
+    snow: {
+      id: 'snow', name: 'برف', mul: .62, st: { stove: 2.2, kitchen: 1.6, peyk: 1.5 }, w: 5,
+      note: 'برف گرفته. کم می‌آیند، ولی هرکس می‌آید سیر می‌خورد.',
+      icon: '<path d="M6 14a4 4 0 0 1 .8-7.9 5.5 5.5 0 0 1 10.5 1.6A3.5 3.5 0 0 1 17 14z"/><path d="M8 18h.01M12 18h.01M16 18h.01M10 21h.01M14 21h.01"/>'
+    }
+  };
+
+  /* هوای هر شهر با فصل — شاخص فصل: ۰ بهار، ۱ تابستان، ۲ پاییز، ۳ زمستان */
+  var CLIMATE = {
+    mild: [['clear', 'rain'], ['clear', 'hot'], ['clear', 'rain', 'fog'], ['cold', 'rain', 'clear']],
+    north: [['rain', 'clear'], ['clear', 'rain'], ['rain', 'fog'], ['snow', 'cold', 'rain']],
+    desert: [['clear', 'hot'], ['hot', 'clear'], ['clear'], ['cold', 'clear']],
+    mountain: [['clear', 'cold'], ['clear'], ['cold', 'fog'], ['snow', 'snow', 'cold']]
+  };
+
+  /* ═══════════════════════════════════════════════
+     شهرها — هر واگذاری یک شهر تازه
+     tint: رنگ آسمان، برای اینکه هر شهر حالِ خودش را داشته باشد
+     ═══════════════════════════════════════════════ */
+  var CITIES = [
+    { name: 'کوچه‌ی قدیم', climate: 'mild', tint: null, note: 'همان‌جا که شروع شد.' },
+    { name: 'بندر', climate: 'north', tint: '#1a3040', note: 'بوی نم و ماهی.' },
+    { name: 'کویر', climate: 'desert', tint: '#2e2418', note: 'شب‌ها سرد، روزها بی‌رحم.' },
+    { name: 'کوهستان', climate: 'mountain', tint: '#1c2634', note: 'هوا رقیق است، مردم گرم.' },
+    { name: 'پایتخت', climate: 'mild', tint: '#241f2e', note: 'همه عجله دارند.' },
+    { name: 'شهر مرزی', climate: 'desert', tint: '#2a2020', note: 'کامیون‌ها تمام شب می‌آیند.' }
+  ];
+
+  /* ═══════════════════════════════════════════════
+     مناسبت‌ها — روی تقویم شمسیِ واقعی
+
+     m/d: ماه و روز شمسی. wd: روز هفته (برای شب جمعه).
+     span: چند روز طول می‌کشد.
+     ═══════════════════════════════════════════════ */
+  var OCCASIONS = [
+    {
+      id: 'nowruz', name: 'نوروز', m: 1, d: 1, span: 4, mul: 1.7,
+      note: 'سال نو. همه بیرون‌اند.', integ: 3,
+      icon: '<path d="M12 22V8M12 8c0-3 2-6 5-6 0 3-2 6-5 6zM12 8C12 5 10 2 7 2c0 3 2 6 5 6z"/><path d="M6 22h12"/>'
+    },
+    {
+      id: 'sizdah', name: 'سیزده‌به‌در', m: 1, d: 13, span: 1, mul: 1.45,
+      note: 'همه بیرون شهرند. هرکه مانده، گرسنه است.',
+      icon: '<path d="M12 21v-8M12 13c-4 0-7-3-7-7 4 0 7 3 7 7zM12 13c4 0 7-3 7-7-4 0-7 3-7 7z"/>'
+    },
+    {
+      id: 'yalda', name: 'شب یلدا', m: 9, d: 30, span: 1, mul: 2.1,
+      note: 'بلندترین شب سال. تا صبح بیدارند.', integ: 4,
+      icon: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z"/>'
+    },
+    {
+      id: 'ramadan', name: 'ماه رمضان', m: 0, d: 0, span: 0, mul: 1, ramadan: 1,
+      note: 'روزها خلوت، افطار و سحر شلوغ.',
+      icon: '<path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/><path d="M17 3l.7 2 2 .7-2 .7L17 8.4l-.7-2-2-.7 2-.7z"/>'
+    },
+    {
+      id: 'jomeh', name: 'شب جمعه', wd: 4, span: 1, mul: 1.3,
+      note: 'فردا تعطیل است. کسی عجله ندارد برود.',
+      icon: '<path d="M3 8h18M3 8V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 2v4M16 2v4"/>'
+    },
+    {
+      id: 'mehr', name: 'اول مهر', m: 7, d: 1, span: 3, mul: 1.35,
+      note: 'مدرسه‌ها باز شد. بعدازظهرها شلوغ است.',
+      icon: '<path d="M12 4L2 9l10 5 10-5z"/><path d="M6 11.5V17c0 1.5 3 3 6 3s6-1.5 6-3v-5.5"/>'
+    }
+  ];
+
+  /* منحنی وارونه‌ی رمضان: روزها مرده، افطار و سحر اوج */
+  var RAMADAN_DEMAND = [
+    { from: 19, mul: 2.20, name: 'افطار', mood: 'peak' },
+    { from: 22, mul: 1.30, name: 'بعد افطار', mood: 'late' },
+    { from: 2, mul: 1.60, name: 'سحری', mood: 'peak' },
+    { from: 5, mul: 0.30, name: 'بعد سحر', mood: 'dead' },
+    { from: 9, mul: 0.22, name: 'روزه', mood: 'dead' },
+    { from: 16, mul: 0.75, name: 'نزدیک افطار', mood: 'afternoon' }
+  ];
+
   /* ───────── مواد و ریسک ───────── */
   /* `integ` ضربه‌ی یک‌باره‌ی پایان شب است.
      `target` جایی است که اصالت با ادامه دادنِ همین مواد ته می‌نشیند.
@@ -182,6 +321,85 @@
     mid: { lo: .92, hi: 1.14, label: 'معمولی', note: 'مثل هر شب' },
     bold: { lo: .62, hi: 1.6, label: 'جسور', note: 'یا می‌ترکانی یا مواد روی دستت می‌ماند' }
   };
+
+  /* ═══════════════════════════════════════════════
+     کارمندها
+
+     دو دسته نقش:
+       st     → روی یک ایستگاه می‌ایستد و آن را تقویت می‌کند
+       global → جایی نمی‌ایستد، اثرش روی کل کسب‌وکار است
+
+     درجه‌ها: عادی / ماهر / استاد
+     درجه هم توانِ کار را بالا می‌برد هم دستمزد را.
+     ═══════════════════════════════════════════════ */
+  var GRADES = [
+    { id: 0, name: 'عادی', power: 1, wage: 1, color: '#8b98ad', odds: 70 },
+    { id: 1, name: 'ماهر', power: 1.6, wage: 1.8, color: '#63a4e0', odds: 25 },
+    { id: 2, name: 'استاد', power: 2.5, wage: 3.2, color: '#e9b96a', odds: 5 }
+  ];
+
+  var ROLES = [
+    {
+      id: 'helper', name: 'شاگرد', tier: 0, st: null,
+      desc: 'هر جا بایستد کار می‌کند، ولی هیچ‌جا استاد نیست',
+      icon: '<circle cx="12" cy="7" r="3.5"/><path d="M5 21c0-4 3-6.5 7-6.5s7 2.5 7 6.5"/>'
+    },
+    {
+      id: 'cook', name: 'آشپز', tier: 1, st: 'stove',
+      desc: 'پشت اجاق',
+      icon: '<path d="M6 20h12M8 20V9a4 4 0 0 1 8 0v11M10 5c0-1 1-1.6 1-2.6.8.8 2 1.6 2 3"/>'
+    },
+    {
+      id: 'cashier', name: 'صندوق‌دار', tier: 2, st: 'counter',
+      desc: 'پشت پیشخوان',
+      icon: '<path d="M3 10h18M4 10l1 10h14l1-10M8 10V6h8v4"/>'
+    },
+    {
+      id: 'courier', name: 'پیک', tier: 3, st: 'peyk',
+      desc: 'روی موتور',
+      icon: '<circle cx="5" cy="15" r="2.6"/><circle cx="19" cy="15" r="2.6"/><path d="M7.5 14.5h9l-2-6h-3M14 5h3"/>'
+    },
+    {
+      id: 'sous', name: 'سرآشپز', tier: 4, st: 'kitchen', integ: .2,
+      desc: 'آشپزخانه‌ی پشتی · اصالت کندتر افت می‌کند',
+      icon: '<path d="M4 4v16M4 12h6M10 4v16M14 20V9a3 3 0 0 1 6 0v11"/>'
+    },
+    {
+      id: 'buyer', name: 'دلال مواد', tier: 5, global: 'ingCost', v: .12,
+      desc: 'هزینه‌ی مواد هر شب ۱۲٪ کمتر',
+      icon: '<path d="M6 8h12l2 12H4z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>'
+    },
+    {
+      id: 'manager', name: 'مدیر شیفت', tier: 6, global: 'need', v: .15,
+      desc: 'نیاز نیروی همه‌ی ایستگاه‌ها ۱۵٪ کمتر',
+      icon: '<path d="M4 21V4h10v17M14 9h6v12"/><path d="M7 8h4M7 12h4M7 16h4"/>'
+    },
+    {
+      id: 'account', name: 'حسابدار', tier: 7, global: 'wage', v: .18,
+      desc: 'دستمزد کل ۱۸٪ کمتر',
+      icon: '<path d="M4 3h16v18H4z"/><path d="M8 7h8M8 11h3M13 11h3M8 15h3M13 15h3"/>'
+    },
+    {
+      id: 'trainer', name: 'مربی', tier: 8, global: 'eff', v: .08,
+      desc: 'کارایی همه‌ی ایستگاه‌ها ۸٪ بالاتر',
+      icon: '<path d="M12 4L2 9l10 5 10-5z"/><path d="M6 11.5V17c0 1.5 3 3 6 3s6-1.5 6-3v-5.5"/>'
+    },
+    {
+      id: 'marketer', name: 'مدیر بازاریابی', tier: 9, st: 'brand',
+      desc: 'روی آوازه',
+      icon: '<path d="M4 12l4-7 4 3 4-5 4 9v5H4z"/>'
+    },
+    {
+      id: 'area', name: 'مدیر منطقه', tier: 10, global: 'allSt', v: .06,
+      desc: 'درآمد همه‌ی ایستگاه‌ها ۶٪ بیشتر',
+      icon: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"/>'
+    },
+    {
+      id: 'cfo', name: 'مدیر مالی', tier: 11, global: 'night', v: .15,
+      desc: 'درآمد شبِ بسته ۱۵٪ بیشتر',
+      icon: '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'
+    }
+  ];
 
   /* ───────── آدم‌ها ───────── */
   var PEOPLE = [
@@ -392,13 +610,69 @@
     }
   ];
 
-  /* ───────── فروشگاه ───────── */
-  /* بسته‌های الماس — نمایشی. هیچ درگاه پرداختی وصل نیست. */
+  /* ═══════════════════════════════════════════════
+     فروشگاه
+
+     ⚠️ حالت آزمایشی: هیچ درگاه پرداختی وصل نیست.
+     خرید داخل خود بازی تأیید می‌شود و جنس بلافاصله اضافه می‌شود.
+     برای انتشار واقعی فقط باید `A.billing` در js/billing.js با
+     SDK بازار عوض شود؛ بقیه‌ی بازی دست نمی‌خورد.
+     ═══════════════════════════════════════════════ */
+
+  /* بسته‌های فیروزه — پنج پله */
   var GEM_PACKS = [
-    { id: 'p1', gems: 50, price: '۲۹٬۰۰۰ تومان', tag: '' },
-    { id: 'p2', gems: 120, price: '۵۹٬۰۰۰ تومان', tag: '۲۰٪ بیشتر' },
-    { id: 'p3', gems: 320, price: '۱۴۹٬۰۰۰ تومان', tag: 'محبوب' },
-    { id: 'p4', gems: 900, price: '۳۹۹٬۰۰۰ تومان', tag: 'بهترین ارزش' }
+    { id: 'g1', gems: 50, price: '۲۹٬۰۰۰ تومان', tag: '', name: 'مشت' },
+    { id: 'g2', gems: 120, price: '۵۹٬۰۰۰ تومان', tag: '۲۰٪ بیشتر', name: 'کیسه' },
+    { id: 'g3', gems: 320, price: '۱۴۹٬۰۰۰ تومان', tag: 'محبوب', name: 'صندوق', hot: 1 },
+    { id: 'g4', gems: 900, price: '۳۹۹٬۰۰۰ تومان', tag: 'بهترین ارزش', name: 'گاوصندوق', best: 1 },
+    { id: 'g5', gems: 2500, price: '۹۹۹٬۰۰۰ تومان', tag: '۳ برابر', name: 'خزانه' }
+  ];
+
+  /* بسته‌های ویژه — ترکیبی
+     give: چه چیزهایی می‌دهد
+     once: فقط یک بار خریدنی
+     minTier / maxTier: شرط نمایش                                    */
+  var BUNDLES = [
+    {
+      id: 'starter', name: 'بسته‌ی شروع', price: '۴۹٬۰۰۰ تومان',
+      tag: 'فقط یک بار', once: 1, maxTier: 3,
+      color: 'green',
+      desc: 'برای اینکه چرخ زودتر راه بیفتد',
+      give: { gems: 80, incomeHours: 2, staff: 1, staffGrade: 'ماهر' },
+      icon: '<path d="M3 8h18v13H3z"/><path d="M12 8v13M3 8l2-5h14l2 5"/>'
+    },
+    {
+      id: 'growth', name: 'بسته‌ی رشد', price: '۱۹۹٬۰۰۰ تومان',
+      tag: '', once: 1, minTier: 3,
+      color: 'blue',
+      desc: 'وقتی جا کم می‌آوری',
+      give: { gems: 250, incomeHours: 6, space: 10 },
+      icon: '<path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/>'
+    },
+    {
+      id: 'master', name: 'بسته‌ی استاد', price: '۴۹۹٬۰۰۰ تومان',
+      tag: '', once: 1, minTier: 7,
+      color: 'purple',
+      desc: 'برای وقتی که دیگر خودت آنجا نیستی',
+      give: { gems: 700, staff: 1, staffGrade: 'استاد', abroo: 3 },
+      icon: '<path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/>'
+    },
+    {
+      id: 'daily', name: 'صندوق روزانه', price: '۱۴۹٬۰۰۰ تومان',
+      tag: '۳۰ روز', sub: 30,
+      color: 'gold',
+      desc: 'هر روز که سر بزنی، ۲۰ فیروزه',
+      give: { gemsPerDay: 20, days: 30 },
+      icon: '<path d="M3 8h18v12H3z"/><path d="M3 8l3-4h12l3 4M12 12v4M10 14h4"/>'
+    },
+    {
+      id: 'noads', name: 'حذف تبلیغ', price: '۹۹٬۰۰۰ تومان',
+      tag: 'همیشگی', once: 1,
+      color: 'red',
+      desc: 'تبلیغ اجباری حذف می‌شود. جایزه‌های تبلیغ سر جایشان می‌مانند و رایگان می‌شوند.',
+      give: { noAds: 1, gems: 40 },
+      icon: '<path d="M4 5h16v11H4z"/><path d="M9 20h6"/><path d="M4 5l16 11"/>'
+    }
   ];
 
   /* چیزهایی که با الماس خریده می‌شوند */
@@ -427,6 +701,11 @@
       id: 'space', name: 'جای دائمی', gems: 70,
       desc: 'پنج جای اضافه در همه‌ی پرده‌ها، برای همیشه',
       icon: '<path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>'
+    },
+    {
+      id: 'sleep', name: 'تا غروب بخواب', gems: 18,
+      desc: 'ساعت می‌پرد به ۱۸ — سرِ اوج شب',
+      icon: '<path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/><path d="M4 6h4M5 9h2"/>'
     },
     {
       id: 'integ', name: 'دلجویی از کوچه', gems: 30,
@@ -509,8 +788,11 @@
     TIERS: TIERS, STATIONS: STATIONS, COST_GROWTH: COST_GROWTH,
     ING: ING, RISK: RISK, EVENTS: EVENTS, GOALS: GOALS,
     BOOK: BOOK, BADGES: BADGES, PEOPLE: PEOPLE, NIGHT: NIGHT,
-    TIPS: TIPS, ENDINGS: ENDINGS,
-    GEM_PACKS: GEM_PACKS, SHOP_ITEMS: SHOP_ITEMS,
+    TIPS: TIPS, ENDINGS: ENDINGS, CLOCK: CLOCK, DEMAND: DEMAND,
+    ROLES: ROLES, GRADES: GRADES,
+    WEATHER: WEATHER, CLIMATE: CLIMATE, CITIES: CITIES,
+    OCCASIONS: OCCASIONS, RAMADAN_DEMAND: RAMADAN_DEMAND,
+    GEM_PACKS: GEM_PACKS, BUNDLES: BUNDLES, SHOP_ITEMS: SHOP_ITEMS,
 
     /* ثابت‌های اقتصاد — یک‌جا تا تنظیم آسان باشد */
     ECON: {

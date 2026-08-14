@@ -24,11 +24,14 @@
     D.PEOPLE.forEach(function (p) { people[p.id] = p.start; });
     return {
       money: start, total: 0, integ: 70, tier: 0, day: 0, hired: 0,
+      staff: [],            /* [{r:نقش, g:درجه, at:ایستگاه یا ''}] */
       lvl: zero(IDS), crew: zero(IDS), people: people,
       ing: 'normal', risk: 'mid', served: 0, goalsDone: 0,
       lastNote: '', ts: Date.now(), ended: 0,
+      hour: 19,             /* ساعت بازی — شب شروع می‌شود، سرِ اوج */
       closedAt: 0,          /* اگر بسته باشد، زمان بستن */
-      closedRate: 0,        /* نرخ قفل‌شده در لحظه‌ی بستن */
+      closedRate: 0,        /* نرخ پایه‌ی قفل‌شده در لحظه‌ی بستن (بدون تقاضا) */
+      closedHour: 0,        /* ساعت بازی در لحظه‌ی بستن */
       openedAt: Date.now(), /* زمان آخرین باز شدن */
       boostUntil: 0
     };
@@ -39,7 +42,13 @@
     return {
       abroo: 0, abrooTotal: 0, gems: 12, runs: 0, bestTotal: 0,
       book: {}, badges: [], spaceBonus: 0,
-      seenIntro: 0, coached: 0, sound: 1, gfx: 2, adCount: 0, adDay: ''
+      seenIntro: 0, coached: 0, sound: 1, gfx: 2, adCount: 0, adDay: '',
+      /* فروشگاه */
+      ramadan: 0,      /* منحنی وارونه‌ی رمضان — دستی روشن می‌شود */
+      purchases: {},   /* شناسه‌ی بسته → زمان خرید (برای بسته‌های یک‌باره) */
+      noAds: 0,        /* تبلیغ اجباری حذف شده */
+      subUntil: 0,     /* پایان اشتراک صندوق روزانه */
+      subDay: ''       /* آخرین روزی که صندوق گرفته شده */
     };
   }
 
@@ -69,54 +78,114 @@
   }
 
   /* ───────── نیرو ───────── */
-  function crewUsed() {
-    var n = 0;
-    for (var i = 0; i < IDS.length; i++) n += S.crew[IDS[i]];
-    return n;
+  var ST = function () { return A.staff; };
+
+  /* کارمندهای ایستگاهی و کلی */
+  function staffAll() { return S.staff || (S.staff = []); }
+  function staffGlobal() {
+    return staffAll().filter(function (m) { return ST().isGlobal(ST().role(m.r)); });
   }
-  function crewFree() { return S.hired - crewUsed(); }
+  function staffFloor() {
+    return staffAll().filter(function (m) { return !ST().isGlobal(ST().role(m.r)); });
+  }
+  function staffAt(id) {
+    return staffFloor().filter(function (m) { return m.at === id; });
+  }
+  function staffIdle() {
+    return staffFloor().filter(function (m) { return !m.at; });
+  }
+  function crewUsed() { return staffFloor().length - staffIdle().length; }
+  function crewFree() { return staffIdle().length; }
+  function hiredCount() { return staffAll().length; }
+
+  /* توان کل روی یک ایستگاه — نه تعداد نفر، بلکه مجموع توان */
+  function crewPower(id) {
+    var list = staffAt(id), p = 0;
+    for (var i = 0; i < list.length; i++) p += ST().power(list[i], id);
+    return p;
+  }
+  /* نیاز پایه، که «مدیر شیفت» کمش می‌کند */
   function crewNeed(id) {
     var l = S.lvl[id];
-    return l === 0 ? 0 : 1 + Math.floor((l - 1) / 7);
+    if (l === 0) return 0;
+    var base = 1 + Math.floor((l - 1) / 7);
+    var m = ST().globalEffect(staffGlobal(), 'need');
+    return Math.max(1, Math.ceil(base * m));
   }
   /* چند ایستگاه نیروی کامل ندارند */
   function understaffed() {
     var n = 0;
     for (var i = 0; i < IDS.length; i++) {
       var id = IDS[i];
-      if (S.lvl[id] > 0 && S.crew[id] < crewNeed(id)) n++;
+      if (S.lvl[id] > 0 && crewPower(id) < crewNeed(id)) n++;
     }
     return n;
   }
 
-  /* چیدن خودکار: هر نیروی بیکار می‌رود سراغ ایستگاهی که بیشترین
-     درآمد را اضافه می‌کند. دستی چیدن با دوازده ایستگاه شکنجه بود. */
+  /* استخدام یک داوطلب مشخص */
+  function addStaff(member) {
+    staffAll().push({ r: member.r, g: member.g | 0, at: '' });
+    S.hired = hiredCount();
+    return staffAll()[staffAll().length - 1];
+  }
+  /* جابه‌جا کردن یک نفر */
+  function assignStaff(index, stationId) {
+    var list = staffAll();
+    if (index < 0 || index >= list.length) return false;
+    var m = list[index];
+    if (ST().isGlobal(ST().role(m.r))) return false;   /* نقش کلی جایی نمی‌ایستد */
+    if (stationId && !S.lvl[stationId]) return false;  /* ایستگاه خاموش */
+    m.at = stationId || '';
+    syncCrewCounts();
+    return true;
+  }
+  /* شمارنده‌ی قدیمی را هم‌گام نگه می‌داریم تا بقیه‌ی کد نشکند */
+  function syncCrewCounts() {
+    for (var i = 0; i < IDS.length; i++) S.crew[IDS[i]] = staffAt(IDS[i]).length;
+    S.hired = hiredCount();
+  }
+
+  /* چیدن خودکار: هر بیکار می‌رود جایی که بیشترین درآمد را اضافه کند،
+     با در نظر گرفتن تناسب نقش. */
   function autoAssign() {
     var moved = 0, guard = 0;
-    while (crewFree() > 0 && guard++ < 500) {
-      var best = null, bestGain = 0;
-      for (var i = 0; i < D.STATIONS.length; i++) {
-        var s = D.STATIONS[i], id = s.id;
-        if (!S.lvl[id] || S.crew[id] >= crewNeed(id)) continue;
-        var before = stationRate(s);
-        S.crew[id]++;
-        var after = stationRate(s);
-        S.crew[id]--;
-        var gain = after - before;
-        if (gain > bestGain) { bestGain = gain; best = id; }
+    while (guard++ < 500) {
+      var idle = staffIdle();
+      if (!idle.length) break;
+      var bestGain = 0, bestSt = null, bestIdx = -1;
+      for (var k = 0; k < idle.length; k++) {
+        var m = idle[k];
+        for (var i = 0; i < D.STATIONS.length; i++) {
+          var s = D.STATIONS[i], id = s.id;
+          if (!S.lvl[id] || crewPower(id) >= crewNeed(id)) continue;
+          var before = stationRate(s);
+          m.at = id;
+          var after = stationRate(s);
+          m.at = '';
+          var gain = after - before;
+          if (gain > bestGain) { bestGain = gain; bestSt = id; bestIdx = staffAll().indexOf(m); }
+        }
       }
-      if (!best) break;
-      S.crew[best]++;
+      if (!bestSt) break;
+      staffAll()[bestIdx].at = bestSt;
       moved++;
     }
+    syncCrewCounts();
     return moved;
   }
 
   function hireCost() {
-    return Math.floor(E.hireBase * Math.pow(E.hireGrowth, S.hired) * tier().mult);
+    return Math.floor(E.hireBase * Math.pow(E.hireGrowth, hiredCount()) * tier().mult);
   }
-  function wage() {
+  /* دستمزد پایه‌ی یک نفرِ عادی در هر هشت ساعت */
+  function wageBase() {
     return Math.max(300, Math.floor(rawRate() * E.wageShare));
+  }
+  /* دستمزد کل: هر نفر به نسبت درجه‌اش، با تخفیف حسابدار */
+  function wage() {
+    var base = wageBase(), list = staffAll(), sum = 0;
+    for (var i = 0; i < list.length; i++) sum += base * ST().wageFactor(list[i]);
+    return Math.floor(sum * ST().globalEffect(staffGlobal(), 'wage'));
   }
 
   /* ───────── ضریب‌ها ───────── */
@@ -129,17 +198,51 @@
     var lvl = S.lvl[s.id];
     if (!lvl) return 0;
     var need = crewNeed(s.id);
-    var man = need ? Math.min(1, S.crew[s.id] / need) : 1;
-    var r = s.rate * lvl * (.45 + .55 * man) * tier().mult * integMult() * abrooMult() * bookRateMult();
+    /* توان نیرو، نه تعدادشان — استادِ آشپز پشت اجاق چند نفر می‌ارزد */
+    var man = need ? Math.min(1, crewPower(s.id) / need) : 1;
+    var g = staffGlobal();
+    /* سقف کارایی ۱٫۱۲ است، نه بیشتر. قبل از این سقف ۱٫۶ بود و
+       با چند مربی، درآمد ۶۰٪ بالای حالت پایه می‌رفت — نگهبان بالانس
+       دور کامل را از ۴۶ ساعت به ۲۶ ساعت پایین کشید. */
+    var eff = Math.min((.45 + .55 * man) * ST().globalBonus(g, 'eff'), 1.12);
+    var r = s.rate * lvl * eff * tier().mult * integMult() * abrooMult() * bookRateMult();
+    r *= ST().globalBonus(g, 'allSt');
     if (s.id === 'peyk' && perkOn('peykboy')) r *= 1.25;
-    return noBoost ? r : r * boostMult();
+    /* هوا روی هر ایستگاه اثر خودش را دارد: باران پیک را بالا می‌برد،
+       سرما اجاق را، گرما پیشخوان را. */
+    r *= weatherStationMul(s.id);
+    return noBoost ? r : r * boostMult() * demandMult();
   }
   function rawRate() {
     var r = 0;
     for (var i = 0; i < D.STATIONS.length; i++) r += stationRate(D.STATIONS[i], true);
     return r;
   }
-  function rate() { return rawRate() * boostMult(); }
+  /* امروزِ جهان: شهر، هوا، مناسبت. یک بار در هر روزِ بازی حساب می‌شود. */
+  function todayWorld() {
+    if (!A.world) return null;
+    return A.world.summary(M.runs || 0, S.day || 0);
+  }
+  function weather() {
+    return A.world ? A.world.weatherFor(M.runs || 0, S.day || 0) : null;
+  }
+  function occasion() {
+    return A.world ? A.world.occasionToday() : null;
+  }
+  function weatherStationMul(id) {
+    return A.world ? A.world.weatherStationMul(weather(), id) : 1;
+  }
+  /* ضریب کلیِ روز: هوا × مناسبت */
+  function worldMult() {
+    return A.world ? A.world.todayMul(weather()) : 1;
+  }
+
+  /* تقاضا بر اساس ساعت بازی — دستمزد از آن اثر نمی‌گیرد،
+     فقط فروش. میانگین شبانه‌روزش دقیقاً ۱ است. */
+  function demandMult() {
+    return (A.clock ? A.clock.demandAt(S.hour) : 1) * worldMult();
+  }
+  function rate() { return rawRate() * boostMult() * demandMult(); }
 
   /* یک سطح بیشتر از این ایستگاه چقدر به نرخ اضافه می‌کند؟
      چون «جا» محدود است، این عدد معیار درست خرید است، نه قیمت. */
@@ -154,16 +257,27 @@
     }
     return after - before;
   }
-  /* بهترین ایستگاه برای جای بعدی */
-  function bestStationId() {
-    var best = null, bg = -1;
+  /* دو پیشنهاد جدا:
+     buy    = بهترین چیزی که همین حالا پولش را داری
+     target = بهترین چیزی که باید برایش پول جمع کنی
+
+     قبلاً فقط یک عدد برمی‌گشت و چون ایستگاه‌های تازه همیشه بازده
+     بیشتری دارند، نشان «بهترین» همیشه روی گران‌ترین می‌نشست —
+     یعنی روی چیزی که بازیکن پولش را نداشت. */
+  function bestPicks() {
+    var out = { buy: null, target: null };
+    if (spaceCap() - spaceUsed() <= 0) return out;
+    var bAff = null, gAff = 0, bAny = null, gAny = 0;
     for (var i = 0; i < D.STATIONS.length; i++) {
       var s = D.STATIONS[i];
       if (S.tier < s.tier) continue;
       var g = marginalGain(s);
-      if (g > bg) { bg = g; best = s.id; }
+      if (g > gAny) { gAny = g; bAny = s.id; }
+      if (upCost(s, 0) <= S.money && g > gAff) { gAff = g; bAff = s.id; }
     }
-    return best;
+    out.buy = bAff;
+    if (bAny && bAny !== bAff) out.target = bAny;
+    return out;
   }
 
   function tapValue(heat) {
@@ -285,6 +399,35 @@
     return true;
   }
   function addGems(n) { M.gems = Math.max(0, (M.gems || 0) + n); }
+
+  /* ───────── فروشگاه ───────── */
+  function hasPurchase(id) { return !!(M.purchases && M.purchases[id]); }
+  function recordPurchase(id) {
+    if (!M.purchases) M.purchases = {};
+    M.purchases[id] = Date.now();
+  }
+  /* آیا این بسته الان قابل خرید است؟ */
+  function packAvailable(b) {
+    if (b.once && hasPurchase(b.id)) return false;
+    if (b.sub && subActive()) return false;
+    if (b.minTier != null && S.tier < b.minTier) return false;
+    if (b.maxTier != null && S.tier > b.maxTier) return false;
+    return true;
+  }
+  function subActive() { return (M.subUntil || 0) > Date.now(); }
+  function subDaysLeft() {
+    if (!subActive()) return 0;
+    return Math.ceil((M.subUntil - Date.now()) / 86400e3);
+  }
+  /* صندوق روزانه — روزی یک بار */
+  function subChestReady() { return subActive() && M.subDay !== today(); }
+  function claimSubChest() {
+    if (!subChestReady()) return 0;
+    M.subDay = today();
+    addGems(20);
+    return 20;
+  }
+  function adsDisabled() { return !!M.noAds; }
   function spendGems(n) {
     if ((M.gems || 0) < n) return false;
     M.gems -= n;
@@ -348,9 +491,10 @@
     var base = newRun(M);
     if (!raw || typeof raw !== 'object') return base;
     ['money', 'total', 'integ', 'tier', 'day', 'hired', 'served', 'goalsDone', 'ended',
-      'closedAt', 'closedRate', 'openedAt', 'boostUntil'].forEach(function (k) {
+      'hour', 'closedAt', 'closedRate', 'closedHour', 'openedAt', 'boostUntil'].forEach(function (k) {
         base[k] = num(raw[k], base[k]);
       });
+    base.hour = A.clock ? A.clock.norm(base.hour) : 19;
     base.tier = clamp(Math.floor(base.tier), 0, D.TIERS.length - 1);
     base.integ = clamp(base.integ, 0, 100);
     base.hired = Math.max(0, Math.floor(base.hired));
@@ -370,6 +514,38 @@
     IDS.forEach(function (id) {
       while (over > 0 && base.crew[id] > 0) { base.crew[id]--; over--; }
     });
+
+    /* ───── کارمندها ─────
+       ذخیره‌ی تازه فهرست دارد. ذخیره‌ی قدیمی فقط یک عدد داشت،
+       پس همان تعداد «شاگرد عادی» می‌سازیم و سرِ جای قبلی‌شان می‌گذاریم.
+       هیچ نیرویی از دست نمی‌رود. */
+    base.staff = [];
+    var ROLE_IDS = D.ROLES.map(function (r) { return r.id; });
+    if (Array.isArray(raw.staff) && raw.staff.length) {
+      raw.staff.slice(0, 400).forEach(function (m) {
+        if (!m || typeof m !== 'object') return;
+        var rid = ROLE_IDS.indexOf(m.r) >= 0 ? m.r : 'helper';
+        var g = clamp(Math.floor(num(m.g, 0)), 0, D.GRADES.length - 1);
+        var at = (typeof m.at === 'string' && IDS.indexOf(m.at) >= 0) ? m.at : '';
+        base.staff.push({ r: rid, g: g, at: at });
+      });
+    } else {
+      /* مهاجرت از ذخیره‌ی قدیمی */
+      IDS.forEach(function (id) {
+        for (var i = 0; i < base.crew[id]; i++) base.staff.push({ r: 'helper', g: 0, at: id });
+      });
+      var rest = Math.max(0, base.hired - base.staff.length);
+      for (var j = 0; j < rest; j++) base.staff.push({ r: 'helper', g: 0, at: '' });
+    }
+    /* نقش کلی نباید سرِ ایستگاه بماند، و ایستگاه خاموش هم نه */
+    base.staff.forEach(function (m) {
+      var r = D.ROLES.filter(function (x) { return x.id === m.r; })[0];
+      if ((r && r.global) || (m.at && !base.lvl[m.at])) m.at = '';
+    });
+    base.hired = base.staff.length;
+    IDS.forEach(function (id) {
+      base.crew[id] = base.staff.filter(function (m) { return m.at === id; }).length;
+    });
     PIDS.forEach(function (id) {
       var p = D.PEOPLE.find(function (x) { return x.id === id; });
       base.people[id] = clamp(num(raw.people && raw.people[id], p.start), 0, 100);
@@ -385,9 +561,19 @@
     var m = newMeta();
     if (!raw || typeof raw !== 'object') return m;
     ['abroo', 'abrooTotal', 'gems', 'runs', 'bestTotal', 'spaceBonus',
-      'seenIntro', 'coached', 'sound', 'adCount'].forEach(function (k) {
+      'seenIntro', 'coached', 'sound', 'adCount', 'noAds', 'subUntil', 'ramadan'].forEach(function (k) {
         m[k] = Math.max(0, num(raw[k], m[k]));
       });
+    if (typeof raw.subDay === 'string') m.subDay = raw.subDay.slice(0, 12);
+    /* سابقه‌ی خرید — فقط شناسه‌های شناخته‌شده */
+    if (raw.purchases && typeof raw.purchases === 'object') {
+      var known = D.GEM_PACKS.map(function (p) { return p.id; })
+        .concat(D.BUNDLES.map(function (b) { return b.id; }));
+      known.forEach(function (id) {
+        var t = num(raw.purchases[id], 0);
+        if (t > 0) m.purchases[id] = t;
+      });
+    }
     if (m.abrooTotal < m.abroo) m.abrooTotal = m.abroo;
     m.gfx = clamp(Math.floor(num(raw.gfx, 2)), 0, 2);
     if (typeof raw.adDay === 'string') m.adDay = raw.adDay.slice(0, 12);
@@ -424,16 +610,25 @@
     isClosed: isClosed, boostLeft: boostLeft, boostMult: boostMult,
     spaceUsed: spaceUsed, spaceCap: spaceCap,
     crewFree: crewFree, crewUsed: crewUsed, crewNeed: crewNeed,
-    understaffed: understaffed, autoAssign: autoAssign,
-    hireCost: hireCost, wage: wage,
+    crewPower: crewPower, understaffed: understaffed, autoAssign: autoAssign,
+    staffAll: staffAll, staffAt: staffAt, staffIdle: staffIdle,
+    staffGlobal: staffGlobal, staffFloor: staffFloor, hiredCount: hiredCount,
+    addStaff: addStaff, assignStaff: assignStaff, syncCrewCounts: syncCrewCounts,
+    hireCost: hireCost, wage: wage, wageBase: wageBase,
     abrooMult: abrooMult, integMult: integMult,
     stationRate: stationRate, rate: rate, rawRate: rawRate, tapValue: tapValue,
-    marginalGain: marginalGain, bestStationId: bestStationId,
+    demandMult: demandMult, worldMult: worldMult,
+    weather: weather, occasion: occasion, todayWorld: todayWorld,
+    city: function () { return A.world ? A.world.cityFor(M.runs || 0) : null; },
+    marginalGain: marginalGain, bestPicks: bestPicks,
     upCost: upCost, bulkCost: bulkCost, buyPlan: buyPlan,
     tierCost: tierCost, tierReq: tierReq, tierBlocked: tierBlocked, discount: discount,
     applyInteg: applyInteg, driftInteg: driftInteg, shiftPeople: shiftPeople, integLossMul: integLossMul,
     abrooGain: abrooGain, canPrestige: canPrestige, doPrestige: doPrestige,
     addGems: addGems, spendGems: spendGems, adsLeft: adsLeft, useAd: useAd,
+    hasPurchase: hasPurchase, recordPurchase: recordPurchase, packAvailable: packAvailable,
+    subActive: subActive, subDaysLeft: subDaysLeft,
+    subChestReady: subChestReady, claimSubChest: claimSubChest, adsDisabled: adsDisabled,
     checkBadges: checkBadges, hasBadge: hasBadge,
     save: save, load: load, wipe: wipe, hadOldSave: hadOldSave, dropOldSaves: dropOldSaves
   };

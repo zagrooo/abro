@@ -130,6 +130,25 @@
 }
 .ld-tip::before{content:'◆ ';color:var(--gold-d);font-size:9px;vertical-align:middle}
 
+/* وقتی بازی اصلاً بالا نمی‌آید */
+.ld-fatal,.fatal{
+  position:absolute;left:50%;bottom:16%;transform:translateX(-50%);z-index:5;
+  width:min(320px,86vw);padding:16px;border-radius:16px;text-align:center;
+  background:rgba(30,18,18,.96);border:1px solid #6b3a32;box-shadow:0 14px 40px rgba(0,0,0,.6);
+}
+.fatal{position:fixed;top:50%;bottom:auto;transform:translate(-50%,-50%);z-index:400}
+.ld-fatal b,.fatal b{display:block;color:#f0a08e;font-size:14px;margin-bottom:8px}
+.ld-fatal p,.fatal p{margin:0 0 10px;font-size:12px;line-height:1.9;color:#cbb8b3}
+.ld-fatal code{
+  display:block;font-size:10px;color:#8f9aa8;background:#12161f;
+  padding:8px;border-radius:8px;margin-bottom:10px;
+  word-break:break-all;text-align:left;direction:ltr;
+}
+.ld-fatal button{
+  width:100%;padding:11px;border-radius:11px;font-size:13px;font-weight:700;
+  background:linear-gradient(180deg,#e9b96a,#c08d3f);color:#241604;
+}
+
 .ld-ver{
   position:absolute;bottom:calc(14px + env(safe-area-inset-bottom));left:0;right:0;
   text-align:center;font-size:10px;color:#3c4658;z-index:3;
