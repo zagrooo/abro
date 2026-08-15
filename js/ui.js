@@ -8,11 +8,12 @@
   var $ = U.$, fa = U.fa, money = U.money, clamp = U.clamp;
 
   var tab = 'shop', sheetOn = false, mult = '1';
+  var openCard = null;   /* کدام ایستگاه تکه‌هایش باز است */
   var armPrestige = null, armReset = null;
   var goal = null;
 
   var TAB_TITLE = {
-    shop: 'ایستگاه‌ها', crew: 'نیرو و جا', grow: 'رشد و واگذاری',
+    shop: 'ایستگاه‌ها', menu: 'منوی امشب', crew: 'نیرو و جا', grow: 'رشد و واگذاری',
     book: 'دفترچه‌ی پدر', store: 'فروشگاه', more: 'دفتر'
   };
 
@@ -40,6 +41,21 @@
   }
   function isSheetOpen() { return sheetOn; }
 
+  /* از لمس همان اجاق در صحنه می‌آید: تب ایستگاه‌ها باز شود، کارت
+     همان ایستگاه باز شود، و خودش بیاید جلوی چشم */
+  function openStation(id) {
+    openCard = id;
+    if (sheetOn && tab === 'shop') buildSheet();
+    else { tab = 'shop'; sheetOn = false; openTab('shop'); }
+    var el = document.querySelector('[data-wrap="' + id + '"]');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
+  }
+  function toggleCard(id) {
+    openCard = openCard === id ? null : id;
+    syncSheet();
+    A.audio.sfx.open();
+  }
+
   function svg(path) { return '<svg viewBox="0 0 24 24">' + path + '</svg>'; }
 
   /* ═════════ ساخت محتوای شیت ═════════ */
@@ -47,6 +63,7 @@
     var body = $('shBody');
     body.scrollTop = 0;
     if (tab === 'shop') body.innerHTML = htmlShop();
+    else if (tab === 'menu') body.innerHTML = htmlMenu();
     else if (tab === 'crew') body.innerHTML = htmlCrew();
     else if (tab === 'grow') body.innerHTML = htmlGrow();
     else if (tab === 'book') body.innerHTML = htmlBook();
@@ -58,15 +75,93 @@
 
   function htmlShop() {
     return D.STATIONS.map(function (s) {
-      return '<div class="card" data-card="' + s.id + '">' +
+      return '<div class="cwrap" data-wrap="' + s.id + '">' +
+        '<div class="card" data-card="' + s.id + '">' +
         '<div class="c-ico">' + svg(s.icon) + '<span class="lv" data-lv>۰</span></div>' +
-        '<div class="c-mid"><div class="c-name">' + s.name + '</div>' +
+        '<div class="c-mid"><div class="c-name">' + s.name +
+        '<i class="caret" data-caret></i></div>' +
         '<div class="c-meta" data-meta>—</div>' +
         '<div class="c-bar"><i data-share style="width:0%"></i></div></div>' +
         '<button class="buy" data-up="' + s.id + '"><span data-t>ارتقا</span><span class="c" data-cost>—</span></button>' +
+        '</div>' +
+        '<div class="subgrid" data-sub="' + s.id + '" hidden></div>' +
         '</div>';
     }).join('') + '<div class="note" id="spaceNote">—</div>';
   }
+
+  /* شبکه‌ی زیرقطعه‌های یک ایستگاه.
+     فقط برای کارتِ باز ساخته می‌شود — دوازده شبکه‌ی همیشه‌روشن سه بار
+     در ثانیه دوباره ساخته می‌شد و روی گوشی حس کندی می‌داد. */
+  function subGridHTML(s) {
+    var defs = St.subDefs(s.id), lv = St.subLevels(s.id), lvl = St.S.lvl[s.id];
+    var focus = St.subFocusOf(s.id);
+    if (!defs.length) return '';
+    var cells = defs.map(function (d, i) {
+      var open = d.at <= lvl;
+      return '<button class="spart' + (open ? '' : ' lock') + (focus === i ? ' on' : '') + '"' +
+        (open ? ' data-part="' + s.id + ':' + i + '"' : ' disabled') + '>' +
+        '<b>' + d.name + '</b>' +
+        '<span>' + (open ? fa(lv[i]) : 'سطح ' + fa(d.at)) + '</span>' +
+        '</button>';
+    }).join('');
+    var nx = St.subNext(s.id);
+    var note = focus >= 0
+      ? 'هر سطح تازه می‌رود روی <b>' + defs[focus].name + '</b>. دوباره بزن تا آزاد شود.'
+      : 'سطح‌های تازه خودشان می‌روند سراغ عقب‌مانده‌ترین تکه. روی هر تکه بزن تا فقط همان بزرگ شود.';
+    if (nx) note += '<br>تکه‌ی بعدی: <b>' + nx.name + '</b> سرِ سطح ' + fa(nx.at) + '.';
+    return '<div class="sgrid">' + cells + '</div><div class="snote">' + note + '</div>';
+  }
+
+  /* ═════════ منو ═════════ */
+  function htmlMenu() {
+    var dishes = D.MENU.map(function (d) {
+      return '<div class="card dish" data-dish="' + d.id + '">' +
+        '<div class="c-ico">' + svg(DISH_ICO) + '<span class="lv" data-fit>—</span></div>' +
+        '<div class="c-mid"><div class="c-name">' + d.name + '</div>' +
+        '<div class="c-meta" data-dmeta>—</div>' +
+        '<div class="c-bar"><i data-dbar style="width:0%"></i></div></div>' +
+        '<button class="buy" data-pick="' + d.id + '"><span data-pt>روی منو</span></button>' +
+        '</div>';
+    }).join('');
+
+    var steps = D.PRICE_STEPS.map(function (p) {
+      return '<button class="pstep" data-price="' + p.id + '">' + p.name + '</button>';
+    }).join('');
+
+    return '<div class="note" id="menuNote">—</div>' +
+      '<div class="sechead">غذاهای امشب</div>' + dishes +
+      '<div class="sechead">قیمت</div>' +
+      '<div class="pbar">' + steps + '</div>' +
+      '<div class="note" id="priceNote">—</div>' +
+      '<div class="sechead">مجوز و رقیب</div>' +
+      '<div class="card" id="licCard">' +
+      '<div class="c-ico">' + svg('<path d="M5 3h14v18l-7-4-7 4z"/><path d="M9 9h6M9 13h4"/>') + '</div>' +
+      '<div class="c-mid"><div class="c-name">مجوز</div><div class="c-meta" id="licMeta">—</div>' +
+      '<div class="c-bar"><i id="licBar" style="width:0%"></i></div></div>' +
+      '<button class="buy" id="licBtn"><span>گرفتن</span><span class="c" id="licCost">—</span></button></div>' +
+      '<div class="card" id="rivalCard">' +
+      '<div class="c-ico">' + svg('<path d="M4 20h16M6 20V9l6-5 6 5v11"/><path d="M10 20v-5h4v5"/>') + '</div>' +
+      '<div class="c-mid"><div class="c-name">رقیب روبه‌رو</div><div class="c-meta" id="rivalMeta">—</div>' +
+      '<div class="c-bar"><i id="rivalBar" style="width:0%"></i></div></div></div>' +
+      '<div class="sechead">کارهای شب</div>' +
+      D.MINIS.map(function (g) {
+        return '<div class="card mini" data-mini="' + g.id + '">' +
+          '<div class="c-ico">' + svg(g.icon) + '<span class="lv" data-mleft>۰</span></div>' +
+          '<div class="c-mid"><div class="c-name">' + g.name + '</div>' +
+          '<div class="c-meta" data-mmeta>—</div></div>' +
+          '<button class="buy" data-play="' + g.id + '"><span>شروع</span></button>' +
+          '</div>';
+      }).join('') +
+      '<div class="sechead">مشتری‌های همیشگی</div>' +
+      D.REGULARS.map(function (r) {
+        var d = St.menuDish(r.dish);
+        return '<div class="regrow" data-reg="' + r.id + '">' +
+          '<b>' + r.name + '</b>' +
+          '<span>ساعت ' + fa(r.hour) + ' · ' + (d ? d.name : r.dish) + '</span>' +
+          '<i data-regon>—</i></div>';
+      }).join('');
+  }
+  var DISH_ICO = '<path d="M3 12h18a9 9 0 0 1-18 0z"/><path d="M12 3v3M7 21h10"/>';
 
   function htmlCrew() {
     return '<div class="card" id="hireCard">' +
@@ -152,7 +247,7 @@
       '<div class="note" id="tierNote">—</div>' +
       '<div class="sechead">واگذاری</div>' +
       '<div class="card" id="prestigeCard">' +
-      '<div class="c-ico">' + svg('<path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/>') + '</div>' +
+      '<div class="c-ico">' + svg(D.MARK.abroo) + '</div>' +
       '<div class="c-mid"><div class="c-name">بسپار و برو شهر بعد</div>' +
       '<div class="c-meta">همه‌چیز صفر می‌شود. فقط آبرو با تو می‌آید.</div></div>' +
       '<button class="buy" id="prestigeBtn">واگذاری<span class="c" id="prestigeGain">—</span></button></div>' +
@@ -181,7 +276,7 @@
         '<div class="c-mid"><div class="c-name">' + it.name + '</div>' +
         '<div class="c-meta" data-imeta>' + it.desc + '</div></div>' +
         '<button class="buy gembuy" data-buyitem="' + it.id + '">' +
-        '<span class="gemrow"><svg viewBox="0 0 24 24" class="gemi"><path d="M6 3h12l4 6-10 12L2 9z"/></svg>' +
+        '<span class="gemrow"><svg viewBox="0 0 24 24" class="gemi">' + D.MARK.gem + '</svg>' +
         fa(it.gems) + '</span></button></div>';
     }).join('');
 
@@ -189,7 +284,7 @@
       return '<button class="pack' + (p.best ? ' best' : '') + (p.hot ? ' hot' : '') +
         '" data-pack="' + p.id + '">' +
         (p.tag ? '<span class="pack-tag">' + p.tag + '</span>' : '') +
-        '<span class="pack-gem"><svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/></svg></span>' +
+        '<span class="pack-gem"><svg viewBox="0 0 24 24">' + D.MARK.gem + '</svg></span>' +
         '<b>' + fa(p.gems) + '</b><span class="pack-price">' + p.price + '</span></button>';
     }).join('');
 
@@ -218,7 +313,7 @@
     }
 
     return '<div class="gembar"><span class="gembar-l">فیروزه‌ی تو</span>' +
-      '<span class="gembar-v"><svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/></svg>' +
+      '<span class="gembar-v"><svg viewBox="0 0 24 24">' + D.MARK.gem + '</svg>' +
       '<b id="storeGems">۰</b></span></div>' +
       (A.billing.isTest()
         ? '<div class="testflag">حالت آزمایشی — هیچ درگاه پرداختی وصل نیست و هیچ پولی کم نمی‌شود</div>'
@@ -252,7 +347,27 @@
         '<div class="bd">' + b.d + '</div></div>';
     }).join('');
 
-    return '<div class="sechead">دیشب</div>' +
+    return '<div class="sechead">کوچه‌ی من</div>' +
+      '<div class="namebox">' +
+      '<input id="shopInput" maxlength="18" placeholder="اسم مغازه‌ات را بنویس">' +
+      '<button id="shopSave">ثبت</button>' +
+      '</div>' +
+      '<div class="note" id="cityNote">—</div>' +
+      '<div class="sechead">کارت‌ها</div>' +
+      '<div class="note tiny">کارت را می‌سازی و خودت می‌فرستی. هیچ‌چیز خودکار جایی نمی‌رود.</div>' +
+      '<div class="cardgrid">' +
+      '<button class="cardbtn" data-card="recipe"><b>دستور پدر</b><i>دستور پختِ یکی از غذاهایت</i></button>' +
+      '<button class="cardbtn" data-card="night"><b>کارت شب</b><i>فاکتور دیشب</i></button>' +
+      '<button class="cardbtn" data-card="occasion"><b>کارت مناسبت</b><i>یلدا، نوروز، …</i></button>' +
+      '<button class="cardbtn" data-card="code"><b>کد کوچه</b><i>کد خودت روی کارت</i></button>' +
+      '</div>' +
+      '<div class="sechead">کد همسایه</div>' +
+      '<div class="note" id="codeNote">—</div>' +
+      '<div class="namebox">' +
+      '<input id="codeInput" maxlength="8" placeholder="کد همسایه را وارد کن">' +
+      '<button id="codeGo">وارد کن</button>' +
+      '</div>' +
+      '<div class="sechead">دیشب</div>' +
       '<div class="note" id="ledger">—</div>' +
       '<div class="sechead">آدم‌ها</div>' + people +
       '<div class="sechead">نشان‌ها</div>' +
@@ -324,11 +439,106 @@
         b.classList.toggle('can', afford);
         b.querySelector('[data-t]').textContent = (lvl ? 'ارتقا' : 'راه‌اندازی') + (p.n > 1 ? ' ×' + fa(p.n) : '');
         b.querySelector('[data-cost]').textContent = p.full ? 'جا نیست' : money(p.c);
+
+        /* تکه‌ها */
+        var wrap = document.querySelector('[data-wrap="' + s.id + '"]');
+        var sg = document.querySelector('[data-sub="' + s.id + '"]');
+        var show = openCard === s.id && !locked;
+        if (wrap) wrap.classList.toggle('open', show);
+        if (sg) {
+          sg.hidden = !show;
+          /* تا سطح یا تکه‌ی انتخابی عوض نشده، دوباره ساخته نشود */
+          var sig = lvl + ':' + St.subFocusOf(s.id);
+          if (show && sg.dataset.sig !== sig) {
+            sg.dataset.sig = sig;
+            sg.innerHTML = subGridHTML(s);
+          }
+        }
       });
       var n = $('spaceNote');
       if (n) n.innerHTML = 'فضا: <b>' + fa(used) + ' از ' + fa(cap) + '</b> — هر سطح یک جا می‌گیرد. ' +
         'چون جا کم است، عددی که مهم است <b>«برای هر جا»</b> است نه قیمت. ' +
         'ایستگاه‌های تازه گران‌ترند ولی هر جایشان خیلی بیشتر می‌آورد.';
+
+    } else if (tab === 'menu') {
+      var slots = St.menuSlots(), on = St.menuList();
+      var mood = A.clock.bandAt(S.hour), wx = St.weather();
+      D.MENU.forEach(function (d) {
+        var el = document.querySelector('[data-dish="' + d.id + '"]');
+        if (!el) return;
+        var open = St.menuOpen(d), picked = St.menuHas(d.id);
+        var sc = St.dishScore(d);
+        el.classList.toggle('locked', !open);
+        el.classList.toggle('ready', picked && sc > 0);
+        el.classList.toggle('picked', picked);
+        el.querySelector('[data-fit]').textContent = open ? (sc > 0 ? '+' + fa(Math.round(sc * 100)) : fa(Math.round(sc * 100))) : '×';
+        el.querySelector('[data-dmeta]').textContent = open
+          ? (sc > 0 ? 'الان ساعتش است' + (wx && d.wx.indexOf(wx.id) >= 0 ? ' و هوایش هم' : '') : 'الان وقتش نیست — ' + d.desc)
+          : 'در پرده‌ی ' + fa(d.tier + 1) + ' باز می‌شود';
+        el.querySelector('[data-dbar]').style.width = clamp((sc + .05) / .16 * 100, 0, 100) + '%';
+        var pb = el.querySelector('[data-pick]');
+        pb.disabled = !open;
+        pb.classList.toggle('can', open && (picked || on.length < slots));
+        pb.querySelector('[data-pt]').textContent = picked ? 'بردار' : 'روی منو';
+      });
+      var mn = $('menuNote');
+      if (mn) mn.innerHTML = 'الان <b>' + mood.name + '</b> است' + (wx ? ' و هوا <b>' + wx.name + '</b>' : '') +
+        '. منو: <b>' + fa(on.length) + ' از ' + fa(slots) + '</b> — ضریب فروش <b>' +
+        U.pct(St.menuMult() * 100) + '</b>.<br>' +
+        'غذای درست سرِ ساعت درست می‌فروشد. دیگِ بی‌مشتری روی اجاق، ضرر است.';
+      document.querySelectorAll('[data-price]').forEach(function (b) {
+        b.classList.toggle('on', +b.dataset.price === St.priceStep());
+      });
+      var pn = $('priceNote'), pi = St.priceInfo();
+      if (pn) pn.innerHTML = '<b>' + pi.name + '</b> — ' + pi.note + '<br>' +
+        'از هر ده مشتری <b>' + fa(Math.round(St.priceFlow() * 10)) + '</b> می‌ماند، ' +
+        'اثر نهایی روی فروش <b>' + U.pct(St.priceMult() * 100) + '</b>.<br>' +
+        'اصالت بالا یعنی مردم پای قیمتت می‌ایستند؛ اصالت پایین یعنی نمی‌ایستند.';
+      var lm = $('licMeta'), lb = $('licBtn');
+      if (lm) {
+        var left = St.licenceLeft();
+        lm.textContent = left
+          ? (fa(left) + ' شب اعتبار — بازرسی هر ' + fa(D.LICENCE.every) + ' شب')
+          : 'نداری. شب بازرسی جریمه می‌شوی.';
+        $('licBar').style.width = (left / D.LICENCE.days * 100) + '%';
+        $('licCost').textContent = money(St.licenceCost());
+        lb.disabled = !!left;
+        lb.classList.toggle('can', !left && S.money >= St.licenceCost());
+        $('licCard').classList.toggle('ready', !!left);
+      }
+      var rm = $('rivalMeta');
+      if (rm) {
+        var pw = St.rivalPower(), bite = 1 - St.rivalMult();
+        rm.textContent = pw <= 0 ? 'هنوز جدی نیست'
+          : (St.perkOn('raqib') ? 'رابطه‌تان خوب است — به تو نمی‌خورد'
+            : 'الان ' + U.pct(bite * 100) + ' از فروشت را می‌برد');
+        $('rivalBar').style.width = (pw * 100) + '%';
+        $('rivalCard').classList.toggle('locked', pw <= 0);
+      }
+      D.MINIS.forEach(function (g) {
+        var el = document.querySelector('[data-mini="' + g.id + '"]');
+        if (!el) return;
+        var open = St.miniOpen(g.id), left = St.miniLeft(g.id);
+        el.classList.toggle('locked', !open);
+        el.classList.toggle('ready', open && left > 0);
+        el.querySelector('[data-mleft]').textContent = open ? fa(left) : '×';
+        el.querySelector('[data-mmeta]').textContent = !open
+          ? ('در پرده‌ی ' + fa(g.minTier + 1) + ' باز می‌شود')
+          : (left > 0
+            ? (g.desc + ' · ' + fa(left) + ' بار مانده امروز')
+            : 'سهمیه‌ی امروز تمام شد');
+        var b = el.querySelector('[data-play]');
+        b.disabled = !open || left <= 0;
+        b.classList.toggle('can', open && left > 0);
+      });
+      D.REGULARS.forEach(function (r) {
+        var row = document.querySelector('[data-reg="' + r.id + '"]');
+        if (!row) return;
+        var has = St.menuHas(r.dish), came = (S.regDay || {})[r.id] === S.day;
+        row.classList.toggle('off', !has);
+        row.querySelector('[data-regon]').textContent = !has ? 'غذایش روی منو نیست'
+          : (came ? 'امشب آمد' : 'منتظرش باش');
+      });
 
     } else if (tab === 'crew') {
       var c = St.hireCost(), hb = $('hireBtn');
@@ -461,7 +671,7 @@
         var b = el.querySelector('[data-buyitem]');
         b.classList.toggle('can', can);
         var meta = el.querySelector('[data-imeta]');
-        if (it.id === 'cash1') meta.textContent = 'همین حالا ' + money(Math.max(1000, St.rate() * 3600)) + ' تومان';
+        if (it.id === 'cash1') meta.textContent = 'همین حالا ' + money(Math.max(1000, St.rate() * 3600)) + ' ایر';
         else if (it.id === 'boost' && St.boostLeft() > 0) {
           meta.textContent = 'فعال — ' + fa(Math.ceil(St.boostLeft() / 60)) + ' دقیقه مانده';
         } else meta.textContent = it.desc;
@@ -493,6 +703,28 @@
         if (el) el.classList.toggle('got', St.hasBadge(b.id));
       });
       var set = function (id, v) { var e = $(id); if (e) e.textContent = v; };
+      var si = $('shopInput');
+      if (si && document.activeElement !== si && si.dataset.set !== '1') {
+        si.value = St.hasShopName() ? St.shopName() : '';
+        si.dataset.set = '1';
+      }
+      var cn = $('cityNote'), ct = St.city(), rule = St.cityRule();
+      if (cn && ct) {
+        var bits = [];
+        if (rule.sell) bits.push('فروش ' + U.pct(rule.sell * 100));
+        if (rule.wage) bits.push('دستمزد ' + U.pct(rule.wage * 100));
+        if (rule.tierCost) bits.push('هزینه‌ی پرده ' + U.pct(rule.tierCost * 100));
+        if (rule.space) bits.push((rule.space > 0 ? '+' : '') + fa(rule.space) + ' جا');
+        if (rule.rival) bits.push('رقیب از ' + U.pct(rule.rival * 100) + ' شروع کرده');
+        if (rule.fine) bits.push('جریمه ×' + fa(rule.fine));
+        cn.innerHTML = '<b>' + ct.name + '</b> — ' + ct.note + '<br>' +
+          (ct.ruleNote || '') + (bits.length ? '<br><b>' + bits.join(' · ') + '</b>' : '') +
+          '<br>اسم مغازه روی تابلو و روی همه‌ی کارت‌ها می‌نشیند.';
+      }
+      var kn = $('codeNote');
+      if (kn) kn.innerHTML = 'کد تو: <b>' + St.myCode() + '</b> — کدِ همسایه که وارد کنی، ' +
+        '۱۵ فیروزه می‌گیری. تا ده کد.<br>' +
+        'تا حالا <b>' + fa(St.codesUsed().length) + '</b> کد وارد کرده‌ای.';
       set('kDay', fa(S.day));
       set('kTotal', money(S.total));
       set('kRuns', fa(M.runs));
@@ -535,7 +767,7 @@
         : 'بسته ' + fa(mins) + ' دقیقه — حدود ' + money(est);
       $('rateBadge').classList.add('closed');
     } else {
-      $('rateBadge').textContent = r > 0 ? money(r) + ' تومان در ثانیه' : 'هنوز چیزی نمی‌آید';
+      $('rateBadge').textContent = r > 0 ? money(r) + ' ایر در ثانیه' : 'هنوز چیزی نمی‌آید';
       $('rateBadge').classList.remove('closed');
     }
 
@@ -569,7 +801,8 @@
 
     /* نام شهر کنار نام مغازه — هر واگذاری یک شهر تازه */
     var cty = St.city();
-    $('shopName').textContent = t.name + (cty ? ' · ' + cty.name : '');
+    /* اسمی که بازیکن گذاشته جلوتر از اسم پرده می‌نشیند — تابلو مالِ اوست */
+    $('shopName').textContent = St.shopName() + (cty ? ' · ' + cty.name : '');
     $('actLbl').textContent = 'پرده‌ی ' + fa(S.tier + 1) + '/' + fa(D.TIERS.length);
     $('integVal').textContent = fa(Math.round(S.integ));
     /* اصالت باید اثرش دیده شود، نه فقط عددش */
@@ -782,8 +1015,8 @@
   /* ═════════ کادو ═════════ */
   function showGift(reward, onTake, onTriple) {
     var isAbroo = reward.type === 'abroo';
-    var one = isAbroo ? (fa(reward.amount) + ' آبرو') : (money(reward.amount) + ' تومان');
-    var three = isAbroo ? (fa(reward.amount * 3) + ' آبرو') : (money(reward.amount * 3) + ' تومان');
+    var one = isAbroo ? (fa(reward.amount) + ' آبرو') : (money(reward.amount) + ' ایر');
+    var three = isAbroo ? (fa(reward.amount * 3) + ' آبرو') : (money(reward.amount * 3) + ' ایر');
     $('giftKind').textContent = isAbroo ? 'یک نفر آبرویت را برد بالا' : 'یکی چیزی گذاشت کف دستت';
     $('giftOne').textContent = one;
     $('giftThree').textContent = three;
@@ -797,13 +1030,123 @@
   }
   function hideGift() { $('giftVeil').hidden = true; }
 
+  /* ═════════ مینی‌گیم ═════════ */
+  function showMini(def) {
+    $('miTitle').textContent = def.name;
+    $('miDone').hidden = true;
+    $('miStage').hidden = false;
+    $('miVeil').hidden = false;
+  }
+  function miniResult(def, score, got) {
+    var lines = money(got.cash) + ' ایر';
+    if (got.gems) lines += ' + ' + fa(got.gems) + ' فیروزه';
+    $('miStage').hidden = true;
+    $('miPay').innerHTML = '<span class="mi-pct">' + fa(Math.round(score * 100)) + '٪</span>' + lines;
+    $('miDone').hidden = false;
+    $('miNote').textContent = score >= .85 ? 'کارِ استاد.'
+      : score >= .5 ? 'بد نبود.'
+        : 'دفعه‌ی بعد بهتر.';
+  }
+  function hideMini() { $('miVeil').hidden = true; }
+
+  /* ═════════ پنل بخش ═════════
+     همان چیزی که با تپ روی خودِ مغازه باز می‌شود: آمار بالا، نوار
+     سطح، دکمه‌ی ارتقا، و شبکه‌ی تکه‌ها. تب‌ها فقط برای چیزهای
+     بی‌مکان مانده‌اند. */
+  var secId = null;
+
+  function stationOf(id) {
+    for (var i = 0; i < D.STATIONS.length; i++) if (D.STATIONS[i].id === id) return D.STATIONS[i];
+    return null;
+  }
+  function showSection(id) {
+    var s = stationOf(id);
+    if (!s) return;
+    secId = id;
+    closeSheet();
+    $('spIco').innerHTML = svg(s.icon);
+    $('spName').textContent = s.name;
+    $('spTitle').textContent = s.name;
+    $('spNote').textContent = s.desc;
+    $('secPanel').hidden = false;
+    buildSecGrid();
+    syncSection();
+  }
+  function hideSection() {
+    secId = null;
+    $('secPanel').hidden = true;
+  }
+  function sectionOpen() { return !!secId; }
+
+  function buildSecGrid() {
+    if (!secId) return;
+    var defs = St.subDefs(secId), lv = St.subLevels(secId), focus = St.subFocusOf(secId);
+    $('spGrid').innerHTML = defs.map(function (d, i) {
+      var open = d.at <= St.S.lvl[secId];
+      return '<button class="sp-cell' + (open ? '' : ' off') + (focus === i ? ' sel' : '') + '"' +
+        (open ? ' data-part="' + secId + ':' + i + '"' : ' disabled') + '>' +
+        '<span class="sp-cn">' + d.name + '</span>' +
+        '<span class="sp-cl">' + (open ? fa(lv[i]) : 'سطح ' + fa(d.at)) + '</span>' +
+        '</button>';
+    }).join('');
+    $('spGrid').dataset.sig = secSig();
+  }
+  function secSig() {
+    if (!secId) return '';
+    return secId + '|' + St.S.lvl[secId] + '|' + St.subLevels(secId).join(',') + '|' + St.subFocusOf(secId);
+  }
+
+  function syncSection() {
+    if (!secId) return;
+    var s = stationOf(secId), S = St.S;
+    var lvl = S.lvl[secId], p = St.buyPlan(s, mult);
+    var need = St.crewNeed(secId), pow = St.crewPower(secId);
+    var man = need ? Math.min(1, pow / need) : 1;
+
+    $('spRate').textContent = money(St.stationRate(s));
+    $('spEff').textContent = lvl ? U.pct((.45 + .55 * man) * 100) : '—';
+    $('spPow').textContent = fa(pow.toFixed(1)) + '/' + fa(need);
+    $('spLvlNum').textContent = fa(lvl);
+
+    var r = St.rate();
+    var share = r > 0 ? clamp(St.stationRate(s) / r * 100, 0, 100) : 0;
+    $('spBar').style.width = share + '%';
+    $('spPct').textContent = U.pct(share);
+
+    var locked = S.tier < s.tier;
+    var b = $('spBuy');
+    b.disabled = locked || p.full || p.n <= 0;
+    b.classList.toggle('can', !locked && !p.full && S.money >= p.c);
+    $('spBuyT').textContent = (lvl ? 'ارتقا' : 'راه‌اندازی') + (p.n > 1 ? ' ×' + fa(p.n) : '');
+    $('spBuyC').textContent = locked ? 'قفل' : (p.full ? 'جا نیست' : money(p.c));
+    $('spNote').textContent = lvl
+      ? ('هر جا ' + money(St.marginalGain(s)) + ' اضافه می‌کند')
+      : s.desc;
+
+    if ($('spGrid').dataset.sig !== secSig()) buildSecGrid();
+  }
+
+  /* ═════════ پیش‌نمای کارت ═════════ */
+  var cardNow = null;
+  function showCard(canvas, kind) {
+    if (!canvas) { A.audio.sfx.no(); U.toast('کارت ساخته نشد.', 'bad'); return; }
+    cardNow = { canvas: canvas, kind: kind };
+    var cv = $('cdCanvas'), g = cv.getContext('2d');
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.drawImage(canvas, 0, 0);
+    $('cdSend').textContent = A.share.canShare() ? 'فرستادن' : 'ذخیره در گوشی';
+    $('cardVeil').hidden = false;
+  }
+  function hideCard() { $('cardVeil').hidden = true; cardNow = null; }
+  function currentCard() { return cardNow; }
+
   /* ═════════ کارت تأیید خرید ═════════ */
   var ICONS = {
-    gem: '<path d="M6 3h12l4 6-10 12L2 9z"/>',
-    coin: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M9.5 10h5M9.5 14h5"/>',
+    gem: A.data.MARK.gem,
+    coin: A.data.MARK.air,
     crew: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M18 8v6M15 11h6"/>',
     space: '<path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>',
-    abroo: '<path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/>',
+    abroo: A.data.MARK.abroo,
     noads: '<path d="M4 5h16v11H4z"/><path d="M9 20h6"/><path d="M4 5l16 11"/>'
   };
 
@@ -914,6 +1257,21 @@
       var G = A.game;
       var up = e.target.closest('[data-up]');
       if (up) { G.buyStation(up.dataset.up, mult, up); return; }
+      var pl = e.target.closest('[data-play]');
+      if (pl) { G.playMini(pl.dataset.play); return; }
+      var pick = e.target.closest('[data-pick]');
+      if (pick) { G.toggleDish(pick.dataset.pick); return; }
+      var pr = e.target.closest('[data-price]');
+      if (pr) { G.setPrice(+pr.dataset.price); return; }
+      if (e.target.closest('#licBtn')) { G.buyLicence(e.target.closest('#licBtn')); return; }
+      var part = e.target.closest('[data-part]');
+      if (part) {
+        var pv = part.dataset.part.split(':');
+        G.focusPart(pv[0], +pv[1]);
+        return;
+      }
+      var card = e.target.closest('[data-card]');
+      if (card) { toggleCard(card.dataset.card); return; }
       if (e.target.closest('#hireBtn')) { G.hire(e.target.closest('#hireBtn')); return; }
       if (e.target.closest('#autoCrewBtn')) { G.autoCrew(); return; }
       if (e.target.closest('#tierBtn')) { G.upgradeTier(); return; }
@@ -946,6 +1304,50 @@
     });
 
     $('goalClaim').addEventListener('click', function () { A.game.claimGoal(); });
+
+    /* بستن مینی‌گیم: چه وسط بازی، چه سرِ نتیجه.
+       اگر بازی هنوز در جریان باشد، لغو می‌شود تا حلقه‌اش نماند. */
+    $('shBody').addEventListener('click', function (e) {
+      var cb = e.target.closest('[data-card]');
+      if (cb) { A.game.makeCard(cb.dataset.card); return; }
+      if (e.target.closest('#shopSave')) { A.game.saveShopName($('shopInput').value); return; }
+      if (e.target.closest('#codeGo')) { A.game.useCode($('codeInput').value); return; }
+    });
+    $('nextCity').addEventListener('click', function () { A.game.goNextCity(); });
+    $('statusBtn').addEventListener('click', function () {
+      var el = $('statusCard');
+      el.hidden = !el.hidden;
+      $('statusBtn').classList.toggle('on', !el.hidden);
+      A.audio.sfx.open();
+    });
+    $('zoomBtn').addEventListener('click', function () {
+      A.game.toggleCityView();
+      A.audio.sfx.open();
+    });
+    $('spClose').addEventListener('click', hideSection);
+    $('spBuy').addEventListener('click', function () {
+      if (secId) A.game.buyStation(secId, mult, $('spBuy'));
+    });
+    $('spGrid').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-part]');
+      if (!b) return;
+      var pv = b.dataset.part.split(':');
+      A.game.focusPart(pv[0], +pv[1]);
+      buildSecGrid();
+    });
+
+    $('cdClose').addEventListener('click', hideCard);
+    $('cdSave').addEventListener('click', function () { A.game.saveCard(); });
+    $('cdSend').addEventListener('click', function () { A.game.sendCard(); });
+
+    $('miQuit').addEventListener('click', function () {
+      if (A.mini.busy()) { A.game.quitMini(); return; }
+      hideMini();
+    });
+    $('miOk').addEventListener('click', function () {
+      hideMini();
+      syncSheet();
+    });
   }
 
   function clickPrestige() {
@@ -977,12 +1379,16 @@
 
   A.ui = {
     init: init, openTab: openTab, closeSheet: closeSheet, isSheetOpen: isSheetOpen,
+    openStation: openStation,
     buildSheet: buildSheet, syncSheet: syncSheet, syncHUD: syncHUD,
     setGoal: setGoal, syncGoal: syncGoal,
     showEvent: showEvent, hideEvent: hideEvent,
     showReceipt: showReceipt, setReceiptNet: setReceiptNet, hideReceipt: hideReceipt,
     showPurchase: showPurchase,
     showGift: showGift, hideGift: hideGift,
+    showMini: showMini, miniResult: miniResult, hideMini: hideMini,
+    showCard: showCard, hideCard: hideCard, currentCard: currentCard,
+    showSection: showSection, hideSection: hideSection, sectionOpen: sectionOpen, syncSection: syncSection,
     showHire: showHire, hideHire: hideHire,
     showAct: showAct, showEnding: showEnding,
     coach: coach, hideCoach: hideCoach,

@@ -238,3 +238,83 @@
 .ending .stat{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
 .ending .stat:last-of-type{border:0}
 .ending .stat b{color:var(--gold)}
+
+/* ═════════ مینی‌گیم ═════════ */
+.micard{
+  width:min(400px,92vw);padding:16px 16px 14px;border-radius:var(--r-l);
+  background:linear-gradient(180deg,#161b26,#0e131c);border:1px solid var(--line2);
+  box-shadow:0 26px 60px rgba(0,0,0,.6);animation:pop .34s var(--spring) both;
+}
+.mi-head{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.mi-head b{font-size:15px}
+.mi-sc{margin-inline-start:auto;font-size:12px;font-weight:800;color:var(--gold)}
+.mi-x{width:30px;height:30px;border-radius:50%;background:var(--pan2);border:1px solid var(--line);
+  display:grid;place-items:center}
+.mi-x svg{width:15px;height:15px;stroke:var(--dim);stroke-width:2;fill:none}
+.mi-timewrap{height:5px;border-radius:99px;background:#0a0e17;overflow:hidden;margin-bottom:12px}
+.mi-timewrap i{display:block;height:100%;background:linear-gradient(90deg,var(--gold-d),var(--gold-l));
+  transition:width .08s linear}
+.mi-stage{min-height:172px;display:grid;align-content:center;gap:12px}
+.mi-note{margin-top:10px;font-size:11.5px;color:var(--dim);text-align:center;min-height:17px}
+.mi-act{padding:14px;border-radius:var(--r-m);font-size:14px;font-weight:800;
+  background:linear-gradient(180deg,var(--gold-l),var(--gold-d));color:#241604}
+.mi-act:active{transform:scale(.97)}
+.mi-rounds{display:flex;gap:5px;justify-content:center}
+.mi-rounds span{width:9px;height:9px;border-radius:50%;background:#232b38}
+.mi-rounds span.on{background:var(--gold)}
+
+/* چانه‌زنی */
+.mi-bar{position:relative;height:44px;border-radius:var(--r-m);background:#0c111a;
+  border:1px solid var(--line);overflow:hidden}
+.mi-zone{position:absolute;top:0;bottom:0}
+.mi-z1{left:28%;right:28%;background:rgba(233,185,106,.16)}
+.mi-z2{left:44%;right:44%;background:rgba(159,240,180,.26)}
+.mi-mark{position:absolute;top:3px;bottom:3px;width:5px;border-radius:3px;
+  background:#fff3d4;box-shadow:0 0 12px rgba(255,243,212,.8);inset-inline-start:0}
+
+/* سیخ‌گردانی */
+.mi-grill{position:relative;height:132px;display:grid;place-items:center}
+.mi-ring{position:absolute;width:120px;height:120px;border-radius:50%;
+  border:3px solid rgba(233,185,106,.5)}
+.mi-ring.hot{border-color:#9ff0b4;box-shadow:0 0 22px rgba(159,240,180,.45)}
+.mi-sk{width:76px;height:76px;stroke:#c9a05e;fill:none;stroke-linecap:round}
+
+/* صف شلوغ */
+.mi-order{text-align:center}
+.mi-order b{display:block;font-size:17px;margin-bottom:3px}
+.mi-order i{font-size:10.5px;color:var(--dim2);font-style:normal}
+.mi-picks{display:grid;gap:7px}
+.mi-pick{padding:13px;border-radius:var(--r-m);font-size:13px;font-weight:700;
+  background:var(--pan2);border:1px solid var(--line);color:var(--ink)}
+.mi-pick.right{background:rgba(159,240,180,.2);border-color:#9ff0b4}
+.mi-pick.wrong{background:rgba(240,160,142,.2);border-color:#f0a08e}
+
+/* گاوصندوق */
+.mi-dial{position:relative;height:152px;display:grid;place-items:center}
+.mi-dial::before{content:'';position:absolute;width:132px;height:132px;border-radius:50%;
+  background:radial-gradient(circle at 40% 34%,#2a323f,#141922);border:3px solid #39424f}
+.mi-notch{position:absolute;width:132px;height:132px;border-radius:50%}
+.mi-notch::before{content:'';position:absolute;top:-3px;left:50%;margin-left:-5px;
+  width:10px;height:16px;border-radius:3px;background:#9ff0b4}
+.mi-hand{position:absolute;width:132px;height:132px;border-radius:50%}
+.mi-hand::before{content:'';position:absolute;top:8px;left:50%;margin-left:-2px;
+  width:4px;height:58px;border-radius:3px;background:var(--gold-l)}
+.mi-dial b{position:relative;font-size:15px;color:var(--gold)}
+
+/* نتیجه */
+.mi-done{display:grid;gap:10px;text-align:center}
+.mi-done b{font-size:16px}
+.mi-pct{display:block;font-size:26px;color:var(--gold);margin-bottom:4px}
+.mi-ok{padding:13px;border-radius:var(--r-m);font-size:14px;font-weight:800;
+  background:linear-gradient(180deg,var(--gold-l),var(--gold-d));color:#241604}
+
+/* ══ پیش‌نمای کارت ══ */
+.cardcard{width:min(400px,92vw);display:grid;gap:10px;animation:pop .34s var(--spring) both}
+.cd-prev{border-radius:var(--r-l);overflow:hidden;border:1px solid var(--line2);
+  box-shadow:0 26px 60px rgba(0,0,0,.6);background:#0a0c12}
+.cd-prev canvas{display:block;width:100%;height:auto}
+.cd-btns{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.cd-send{grid-column:1/-1;padding:14px;border-radius:var(--r-m);font-size:14px;font-weight:800;
+  background:linear-gradient(180deg,var(--gold-l),var(--gold-d));color:#241604}
+.cd-save,.cd-close{padding:12px;border-radius:var(--r-m);font-size:12.5px;font-weight:700;
+  background:var(--pan2);border:1px solid var(--line);color:var(--dim)}

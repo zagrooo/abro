@@ -37,6 +37,10 @@
   function begin() {
     startedAt = performance.now();
     done = false;
+    /* شماره‌ی نسخه از یک‌جا می‌آید. قبلاً در HTML دستی نوشته شده بود و
+       دو نسخه عقب مانده بود. */
+    var v = $('ldVer');
+    if (v) v.textContent = 'نسخه‌ی ' + U.fa(A.VERSION.replace(/\./g, '٫'));
     var el = $('loader');
     if (el) el.hidden = false;
     setProgress(0, 'شروع');

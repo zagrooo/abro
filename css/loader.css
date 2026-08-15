@@ -45,14 +45,27 @@
 /* ─── محتوا ─── */
 .ld-in{position:relative;z-index:2;text-align:center;width:min(340px,86vw)}
 
+/* لوگو دو لایه است: لایه‌ی زیرین دورخط و حجم می‌دهد، لایه‌ی رو
+   گرادیان طلایی است که روی آن می‌لغزد. یک عنصر با دو ::before/::after
+   نمی‌شد چون background-clip:text روی متنِ دورخط‌دار می‌شکند. */
 .ld-logo{
+  position:relative;display:inline-block;
   font-size:clamp(46px,15vw,66px);font-weight:800;letter-spacing:10px;line-height:1.1;
   background:linear-gradient(100deg,#8a6a34 0%,#e9b96a 32%,#fff3d4 46%,#e9b96a 60%,#8a6a34 100%);
   background-size:250% 100%;
   -webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent;color:transparent;
   animation:sheen 3.4s linear infinite, logoIn 1s var(--ease) both;
-  filter:drop-shadow(0 0 26px rgba(233,185,106,.28));
+  filter:drop-shadow(0 1px 0 #2a1c08) drop-shadow(0 3px 1px rgba(0,0,0,.55))
+    drop-shadow(0 0 30px rgba(233,185,106,.34));
+}
+/* سایه‌ی حجم: همان متن، عقب‌تر و تیره‌تر */
+.ld-logo::before{
+  content:attr(data-t);
+  position:absolute;inset:0;z-index:-1;
+  -webkit-text-fill-color:#1b1206;color:#1b1206;
+  -webkit-text-stroke:6px #1b1206;
+  transform:translateY(3px);
 }
 @keyframes sheen{to{background-position:-250% 0}}
 @keyframes logoIn{from{opacity:0;transform:translateY(16px) scale(.94)}}
@@ -94,6 +107,15 @@
 .ld-glow{
   position:absolute;bottom:6px;left:50%;width:200px;height:60px;margin-left:-100px;
   background:radial-gradient(ellipse at center,rgba(255,186,102,.3),transparent 70%);
+  animation:lampFlick 2.6s ease-in-out infinite;
+}
+/* مخروط نور چراغ کوچه، از بالا-راستِ چرخ — همان جهتی که در خود
+   بازی هم سایه‌ها را می‌سازد */
+.ld-cart::after{
+  content:'';position:absolute;bottom:12px;left:50%;margin-left:22px;
+  width:96px;height:74px;pointer-events:none;
+  background:linear-gradient(196deg,rgba(255,198,120,.20),rgba(255,180,96,0) 68%);
+  clip-path:polygon(58% 0,72% 0,100% 100%,4% 100%);
   animation:lampFlick 2.6s ease-in-out infinite;
 }
 @keyframes lampFlick{0%,100%{opacity:.8}45%{opacity:1}70%{opacity:.72}}

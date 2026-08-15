@@ -11,11 +11,12 @@
   var disp = 0, heat = 0, evTimer = 65, goal = null, goalTimer = 45;
   var lastFrame = performance.now(), coinTimer = 0, saveTimer = 0, hudTimer = 0, sheetTick = false;
   var rcNet = 0, rcHours = 0, rcUsedAd = false, hiddenAt = 0, booted = false;
+  var regTimer = 0;
 
   function S() { return St.S; }
   function M() { return St.M; }
 
-  var MODALS = ['shiftVeil', 'evVeil', 'rcVeil', 'actVeil', 'enVeil', 'intro', 'buyVeil', 'giftVeil'];
+  var MODALS = ['shiftVeil', 'evVeil', 'rcVeil', 'actVeil', 'enVeil', 'intro', 'buyVeil', 'giftVeil', 'miVeil', 'cardVeil'];
   function anyModal() {
     for (var i = 0; i < MODALS.length; i++) {
       var el = $(MODALS[i]);
@@ -34,9 +35,18 @@
     if (p.full) { AU.sfx.no(); U.toast('جا نداری. باید بزرگ‌تر شوی.', 'bad'); return; }
     if (S().money < p.c || p.n <= 0) { AU.sfx.no(); return; }
     var first = !S().lvl[s.id];
+    var before = St.subOpenAt(s.id, S().lvl[s.id]);
     S().money -= p.c; disp = S().money;
-    S().lvl[s.id] += p.n;
+    /* سطح از این راه بالا می‌رود تا زیرقطعه‌ها هم‌زمان سهمشان را بگیرند */
+    St.addLevels(s.id, p.n);
     AU.sfx.buy(); U.buzz(10); U.flyCoins(btn, 4);
+    /* تکه‌ی تازه‌ای باز شد؟ خودش خبر بدهد، وگرنه کسی تب را باز نمی‌کند */
+    var opened = St.subOpenAt(s.id, S().lvl[s.id]) - before;
+    if (!first && opened > 0) {
+      var parts = St.subDefs(s.id);
+      var last = parts[St.subOpenAt(s.id, S().lvl[s.id]) - 1];
+      if (last) { AU.sfx.badge(); U.toast(s.name + ': ' + last.name + ' اضافه شد.', 'good'); }
+    }
     if (first) {
       U.toast(s.name + ' راه افتاد.', 'good');
       Sc.burst(500, 380, 12, '#ffd68f');
@@ -85,7 +95,7 @@
         U.toast('برای این پرده حداقل ' + fa(St.tierReq()) + ' سطح ایستگاه لازم داری. الان ' +
           fa(St.spaceUsed()) + ' داری.', 'bad');
       } else if (blocked === 'money') {
-        U.toast('هنوز ' + money(St.tierCost() - S().money) + ' تومان کم داری.', 'bad');
+        U.toast('هنوز ' + money(St.tierCost() - S().money) + ' ایر کم داری.', 'bad');
       }
       return;
     }
@@ -139,17 +149,45 @@
     afterChange();
   }
 
+  /* وقتی شهر تمام شد، خودش خبر می‌دهد. واگذاریِ زودهنگام هم سرِ
+     جایش می‌ماند — این فقط راهِ روشنِ «تمامش کردم» است. */
+  /* نمای کل شهر: عقب می‌رود تا ساختمان‌های دور هم دیده شوند */
+  function toggleCityView() {
+    var wide = Sc.toggleWide();
+    U.toast(wide ? 'نمای شهر' : 'برگشت به مغازه');
+    UI.hideSection();
+    return wide;
+  }
+
+  function syncNextCity() {
+    var el = $('nextCity');
+    if (!el) return;
+    var done = St.cityComplete();
+    el.hidden = !done;
+    if (done) {
+      $('ncGain').textContent = fa(St.abrooGain());
+    }
+  }
+  function goNextCity() {
+    if (!St.cityComplete()) { AU.sfx.no(); return; }
+    prestige();
+    var c = St.city();
+    U.toast('شهر تازه: ' + (c ? c.name : '—') + (c && c.ruleNote ? ' — ' + c.ruleNote : ''), 'good');
+  }
+
   function afterChange() {
     var got = St.checkBadges({ heat: heat });
     if (got.length) {
       got.forEach(function (b, i) {
         setTimeout(function () {
-          U.toast('نشان گرفتی: ' + b.name + ' (+' + fa(b.r) + ' آبرو، +۱ الماس)', 'good');
+          U.toast('نشان گرفتی: ' + b.name + ' (+' + fa(b.r) + ' آبرو، +۱ فیروزه)', 'good');
           AU.sfx.badge();
         }, i * 900);
       });
     }
     UI.syncHUD(disp, heat);
+    syncHot();
+    syncNextCity();
     St.save();
   }
 
@@ -252,12 +290,12 @@
     }
     St.addGems(2);
     AU.sfx.win(); U.buzz([10, 30, 10]);
-    U.toast('+۲ الماس', 'good');
+    U.toast('+۲ فیروزه', 'good');
     afterChange();
   }
 
   /* اجناسی که واقعاً پیاده‌سازی شده‌اند. اگر جنسی به data اضافه شود
-     و اینجا جا بماند، بدون این نگهبان الماس بازیکن دود می‌شد. */
+     و اینجا جا بماند، بدون این نگهبان فیروزه بازیکن دود می‌شد. */
   var ITEM_HANDLERS = ['cash1', 'boost', 'crew', 'abroo', 'space', 'integ', 'sleep'];
 
   function buyItem(id, btn) {
@@ -283,7 +321,7 @@
     }
     if (!St.spendGems(it.gems)) {
       AU.sfx.no();
-      U.toast('الماس کافی نداری.', 'bad');
+      U.toast('فیروزه کافی نداری.', 'bad');
       return;
     }
     switch (id) {
@@ -291,7 +329,7 @@
         var g = Math.max(1000, St.rate() * 3600);
         S().money += g; S().total += g; disp = S().money;
         Sc.spawnCoin(g, true); U.flyCoins(btn, 8);
-        U.toast('+' + money(g) + ' تومان', 'good');
+        U.toast('+' + money(g) + ' ایر', 'good');
         break;
       }
       case 'boost':
@@ -365,7 +403,7 @@
       disp = S().money;
       Sc.spawnCoin(amount, true);
       U.flyCoins($('giftTake'), 8);
-      U.toast('کادو باز شد: +' + money(amount) + ' تومان', 'good');
+      U.toast('کادو باز شد: +' + money(amount) + ' ایر', 'good');
     }
     AU.sfx.coin();
     afterChange();
@@ -382,6 +420,173 @@
     grantGift(pendingGift, 3);
     pendingGift = null;
     UI.hideGift();
+  }
+
+  /* ═════════ لمس ایستگاه در صحنه ═════════
+     تپِ خالی همیشه «سرو» است — هسته‌ی بازی است و نباید دزدیده شود.
+     پس مثل کادو، فقط چیزی که حلقه‌ی نورانی دارد تپ را می‌گیرد:
+     ایستگاهی که همین حالا پول ارتقایش را داری. */
+  function syncHot() {
+    if (!Sc.setHotStations) return;
+    var out = [];
+    if (!St.isClosed() && !anyModal()) {
+      var m = UI.getMult ? UI.getMult() : '1';
+      Sc.hotIds().forEach(function (id) {
+        var s = D.STATIONS.find(function (x) { return x.id === id; });
+        if (!s || S().tier < s.tier) return;
+        var p = St.buyPlan(s, m);
+        if (!p.full && p.n > 0 && S().money >= p.c) out.push(id);
+      });
+    }
+    Sc.setHotStations(out);
+  }
+
+  function tapStation(wx, wy) {
+    if (anyModal() || St.isClosed()) return false;
+    var id = Sc.hitStation(wx, wy);
+    if (!id) return false;
+    var s = D.STATIONS.find(function (x) { return x.id === id; });
+    if (!s || S().tier < s.tier) return false;
+    AU.sfx.open(); U.buzz(6);
+    UI.showSection(id);
+    return true;
+  }
+
+  /* انتخاب تکه‌ای که خریدهای بعدی سراغش می‌روند */
+  function focusPart(id, i) {
+    if (!St.setSubFocus(id, i)) { AU.sfx.no(); return; }
+    AU.sfx.open(); U.buzz(6);
+    UI.syncSheet();
+    St.save();
+  }
+
+  /* ═════════ منو، قیمت، مجوز ═════════ */
+  function toggleDish(id) {
+    if (!St.menuToggle(id)) {
+      AU.sfx.no();
+      var d = St.menuDish(id);
+      if (d && S().tier < d.tier) U.toast(d.name + ' در پرده‌ی ' + fa(d.tier + 1) + ' باز می‌شود.', 'bad');
+      else U.toast('جای دیگری روی منو نداری. یکی را بردار.', 'bad');
+      return;
+    }
+    AU.sfx.open(); U.buzz(6);
+    UI.syncSheet();
+    afterChange();
+  }
+  function setPrice(i) {
+    if (!St.setPrice(+i)) { AU.sfx.no(); return; }
+    AU.sfx.open(); U.buzz(6);
+    UI.syncSheet();
+    afterChange();
+  }
+  function buyLicence(btn) {
+    if (St.licenceOk()) { AU.sfx.no(); U.toast('مجوزت هنوز اعتبار دارد.'); return; }
+    var c = St.buyLicence();
+    if (!c) { AU.sfx.no(); U.toast('پول مجوز را نداری: ' + money(St.licenceCost()) + ' ایر', 'bad'); return; }
+    disp = S().money;
+    AU.sfx.buy(); U.buzz(10); U.flyCoins(btn, 4);
+    U.toast('مجوز گرفتی. ' + fa(D.LICENCE.days) + ' شب اعتبار دارد.', 'good');
+    UI.syncSheet();
+    afterChange();
+  }
+
+  /* ═════════ کوچه: اسم، کارت، کد ═════════ */
+  function saveShopName(v) {
+    var name = St.setShopName(v);
+    AU.sfx.buy(); U.buzz(8);
+    U.toast(name ? ('تابلو عوض شد: ' + name) : 'اسم برداشته شد.', 'good');
+    UI.syncSheet();
+    UI.syncHUD(disp, heat);
+    afterChange();
+  }
+  function useCode(v) {
+    var r = St.redeemCode(v);
+    if (!r.ok) {
+      AU.sfx.no();
+      U.toast(r.why === 'self' ? 'این کد خودت است.'
+        : r.why === 'used' ? 'این کد را قبلاً وارد کرده‌ای.'
+          : r.why === 'max' ? 'بیشتر از این نمی‌شود.'
+            : 'این کد درست نیست.', 'bad');
+      return;
+    }
+    AU.sfx.win(); U.buzz([12, 40, 12]);
+    U.toast('+' + fa(r.gems) + ' فیروزه. همسایه‌ات هم می‌گیرد.', 'good');
+    var ci = $('codeInput');
+    if (ci) ci.value = '';
+    UI.syncSheet();
+    afterChange();
+  }
+  /* کارت‌ها هیچ‌جا خودکار نمی‌روند — ساخته می‌شوند و بازیکن تصمیم
+     می‌گیرد. همین یک جمله کل قرار کمپین انتشار است. */
+  function makeCard(kind) {
+    var arg = null;
+    if (kind === 'recipe') {
+      var list = St.menuList();
+      arg = list.length ? list[0] : D.MENU[0].id;
+    } else if (kind === 'night') {
+      if (!S().day) { AU.sfx.no(); U.toast('هنوز شبی را نبسته‌ای.', 'bad'); return; }
+      arg = {
+        day: S().day, tierName: St.tier().name, net: rcNet || 0,
+        integ: S().integ, hours: rcHours || 8, hired: S().hired,
+        note: S().lastNote || ''
+      };
+    } else if (kind === 'occasion') {
+      arg = St.occasion();
+      if (!arg) { AU.sfx.no(); U.toast('امشب مناسبتی نیست.', 'bad'); return; }
+    }
+    var cv = A.share.make(kind, arg);
+    AU.sfx.open();
+    UI.showCard(cv, kind);
+  }
+  function saveCard() {
+    var c = UI.currentCard();
+    if (!c) return;
+    if (A.share.save(c.canvas, c.kind)) { AU.sfx.buy(); U.toast('کارت ذخیره شد.', 'good'); }
+    else { AU.sfx.no(); U.toast('ذخیره نشد.', 'bad'); }
+  }
+  function sendCard() {
+    var c = UI.currentCard();
+    if (!c) return;
+    A.share.send(c.canvas, c.kind, St.shopName()).then(function (r) {
+      if (r === 'shared') { AU.sfx.win(); U.toast('فرستاده شد.', 'good'); }
+      else if (r === 'saved') { AU.sfx.buy(); U.toast('کارت ذخیره شد.', 'good'); }
+      else if (r === 'failed') { AU.sfx.no(); U.toast('نشد.', 'bad'); }
+    });
+  }
+
+  /* ═════════ مینی‌گیم ═════════ */
+  function playMini(id) {
+    var def = St.miniDef(id);
+    if (!def) return;
+    if (A.mini.busy()) return;
+    if (St.isClosed()) { AU.sfx.no(); U.toast('مغازه بسته است.', 'bad'); return; }
+    if (!St.miniOpen(id)) {
+      AU.sfx.no();
+      U.toast(def.name + ' در پرده‌ی ' + fa(def.minTier + 1) + ' باز می‌شود.', 'bad');
+      return;
+    }
+    /* سهمیه همین‌جا سوخت می‌شود، نه سرِ جایزه — وگرنه بستن مودال
+       وسط بازی یعنی بازی مجانی */
+    if (!St.miniUse(id)) {
+      AU.sfx.no();
+      U.toast('سهمیه‌ی امروزِ ' + def.name + ' تمام شد.', 'bad');
+      return;
+    }
+    UI.showMini(def);
+    A.mini.start(def, function (score) {
+      var got = St.miniReward(id, score);
+      disp = S().money;
+      Sc.spawnCoin(got.cash, true);
+      AU.sfx.coin();
+      UI.miniResult(def, score, got);
+      afterChange();
+    });
+    St.save();
+    UI.syncSheet();
+  }
+  function quitMini() {
+    /* بیرون زدن وسط بازی = نمره‌ی صفر، ولی جایزه‌ی کف را می‌گیرد */
+    A.mini.cancel();
   }
 
   /* ═════════ سرو ═════════ */
@@ -450,7 +655,7 @@
     S().money += goal.reward; S().total += goal.reward;
     S().goalsDone = (S().goalsDone || 0) + 1;
     St.applyInteg(1);
-    U.toast('سفارش ویژه رسید. +' + money(goal.reward) + ' تومان', 'good');
+    U.toast('سفارش ویژه رسید. +' + money(goal.reward) + ' ایر', 'good');
     AU.sfx.coin();
     Sc.spawnCoin(goal.reward, true);
     U.flyCoins($('goalClaim'), 6);
@@ -522,7 +727,7 @@
     var ing = D.ING[p.ing];
     /* پیش‌بینی برای هشت ساعت آینده، با میانگین تقاضای همان بازه */
     var demand = A.clock.demandOver(S().hour, 8);
-    var base = St.rawRate() * St.boostMult() * demand;
+    var base = St.rawRate() * St.boostMult() * demand * St.sellMult();
     var perHour = base * 3600 * E.closedRate * ing.out * (1 + .18 * St.book('night'));
     var netHour = Math.max(0, perHour - perHour * ing.cost - S().hired * St.wage() / 8);
     $('fcNet').textContent = money(netHour);
@@ -557,7 +762,7 @@
     /* نرخ همان لحظه‌ی بستن قفل می‌شود. وگرنه می‌شد ده ساعت بسته گذاشت،
        بعد درست قبل از باز کردن «شب شلوغ» خرید و کل شب را دو برابر کرد.
        نرخ پایه ذخیره می‌شود — تقاضا بعداً روی کل بازه میانگین گرفته می‌شود. */
-    S().closedRate = St.rawRate() * St.boostMult();
+    S().closedRate = St.rawRate() * St.boostMult() * St.sellMult();
     S().closedHour = S().hour;
     $('shiftVeil').hidden = true;
     heat = 0;
@@ -572,7 +777,7 @@
     if (!St.isClosed()) return;
     var realHours = (Date.now() - S().closedAt) / 3600e3;
     var hours = clamp(realHours, 0, E.closedCap);
-    var lockedRate = S().closedRate > 0 ? S().closedRate : St.rawRate() * St.boostMult();
+    var lockedRate = S().closedRate > 0 ? S().closedRate : St.rawRate() * St.boostMult() * St.sellMult();
     var startHour = S().closedHour;
     S().closedAt = 0;
     S().closedRate = 0;
@@ -596,7 +801,7 @@
     var luck = wasClosed ? (rk.lo + Math.random() * (rk.hi - rk.lo)) : 1;
     var eff = wasClosed ? E.closedRate * (1 + .18 * St.book('night')) : E.openOfflineRate;
     /* نرخ پایه (بدون تقاضا) × میانگین تقاضای همان بازه‌ی ساعت */
-    var baseRate = rateOverride > 0 ? rateOverride : St.rawRate() * St.boostMult();
+    var baseRate = rateOverride > 0 ? rateOverride : St.rawRate() * St.boostMult() * St.sellMult();
     var startH = startHour == null ? S().hour : startHour;
     var demand = A.clock.demandOver(startH, hours);
     var bands = A.clock.breakdown(startH, hours);
@@ -610,6 +815,23 @@
     S().money += net; S().total += net;
     St.applyInteg(wasClosed ? ing.integ : ing.integ * .4);
     S().lastNote = note;
+
+    /* بازرسی سرِ شب مشخص می‌آید، بعد از بسته شدن حساب — تا جریمه
+       روی همان فاکتوری بنشیند که بازیکن دارد نگاهش می‌کند */
+    var check = null;
+    if (St.checkDue()) {
+      check = St.runCheck();
+      setTimeout(function () {
+        if (check.ok) {
+          AU.sfx.badge();
+          U.toast('بازرس آمد، برگه‌ات تمیز بود.', 'good');
+        } else {
+          AU.sfx.no(); U.buzz([20, 60, 20]);
+          U.toast('بازرسی بدون مجوز: ' + money(check.fine) + ' ایر جریمه' +
+            (check.dirty ? ' (دو برابر، چون آشپزخانه تمیز نبود)' : ''), 'bad');
+        }
+      }, 1400);
+    }
 
     rcNet = net; rcHours = hours; rcUsedAd = false;
     UI.showReceipt({
@@ -635,7 +857,7 @@
   function onReceiptOk() { UI.hideReceipt(); }
   function onCopy() {
     var t = 'آبرو | شب ' + fa(S().day) + ' — ' + St.tier().name + '\n' +
-      S().lastNote + '\nخالص شب: ' + money(rcNet) + ' تومان\n' +
+      S().lastNote + '\nخالص شب: ' + money(rcNet) + ' ایر\n' +
       'اصالت: ' + fa(Math.round(S().integ)) + ' از ۱۰۰';
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -738,6 +960,21 @@
       }
       goalTick(dt, r);
 
+      /* مشتری همیشگی سرِ ساعت خودش. هر دو ثانیه یک نگاه کافی است —
+         پنجره‌اش یک ساعتِ بازی است، یعنی یک دقیقه‌ی واقعی. */
+      regTimer -= dt;
+      if (regTimer <= 0) {
+        regTimer = 2;
+        var reg = St.regularDue();
+        if (reg) {
+          var tip = St.takeRegular(reg);
+          AU.sfx.win(); U.buzz([10, 30, 10]);
+          Sc.spawnCoin(tip, true);
+          U.toast(reg.name + ': ' + reg.line + ' +' + money(tip) + ' ایر', 'good');
+          afterChange();
+        }
+      }
+
       /* شاخص ثابت شکننده بود؛ اگر تعداد پرده‌ها عوض شود از کار می‌افتاد */
       if (!S().ended && St.isLast() && S().total > D.TIERS[D.TIERS.length - 2].cost * 1.4) triggerEnding();
     }
@@ -763,7 +1000,11 @@
       hudTimer = .16;
       sheetTick = !sheetTick;
       UI.syncHUD(disp, heat, sheetTick);
+      if (UI.sectionOpen()) UI.syncSection();
       UI.syncGoal();
+      /* پول لحظه‌به‌لحظه بالا می‌رود، پس حلقه‌ی ایستگاه‌ها هم باید
+         همان‌جا روشن شود، نه فقط بعد از خرید */
+      if (sheetTick) syncHot();
     }
 
     saveTimer -= dt;
@@ -794,7 +1035,7 @@
     if (away < 25 || !St.spaceUsed()) return;
     var hours = clamp(away / 3600, 0, E.openOfflineCap);
     if (away < 240) {
-      var g = St.rawRate() * St.boostMult() * A.clock.demandOver(startH, away / 3600) * away * E.openOfflineRate;
+      var g = St.rawRate() * St.boostMult() * St.sellMult() * A.clock.demandOver(startH, away / 3600) * away * E.openOfflineRate;
       S().money += g; S().total += g;
       U.toast('در نبودت ' + money(g) + ' ایر جمع شد.', 'good');
       afterChange();
@@ -806,12 +1047,81 @@
   /* ═════════ اتصال ورودی‌ها ═════════ */
   function bindInputs() {
     $('serveBtn').addEventListener('click', function () { serve(false); });
-    $('tapZone').addEventListener('pointerdown', function (e) {
-      if (St.isClosed()) return;
-      var w = Sc.toWorld(e.clientX, e.clientY);
-      if (tapGift(w.x, w.y)) return;   /* کادو بر سرو مقدم است */
-      serve(true, w.x, w.y);
-    });
+    /* صحنه‌ی ایزومتریک سه کار می‌کند: لمس، کشیدن، زوم.
+       تصمیم سرِ «بالا آمدنِ انگشت» گرفته می‌شود، نه پایین رفتنش:
+       اگر انگشت جابه‌جا شده باشد یعنی داشت نقشه را می‌گرداند، نه
+       اینکه روی اجاق زده باشد. با دو انگشت هم اصلاً لمسی در کار
+       نیست، فقط زوم. */
+    (function () {
+      var z = $('tapZone');
+      var pts = {};                 /* انگشت‌های روی صفحه */
+      var pid = null, moved = 0, lx = 0, ly = 0;
+      var pinchD = 0, pinching = false;
+
+      function two() {
+        var k = Object.keys(pts);
+        return k.length >= 2 ? [pts[k[0]], pts[k[1]]] : null;
+      }
+      function dist(p, q) { return Math.hypot(p.x - q.x, p.y - q.y); }
+
+      z.addEventListener('pointerdown', function (e) {
+        pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+        var t = two();
+        if (t) { pinching = true; pinchD = dist(t[0], t[1]); return; }
+        pid = e.pointerId; lx = e.clientX; ly = e.clientY; moved = 0;
+      });
+
+      z.addEventListener('pointermove', function (e) {
+        if (!pts[e.pointerId]) return;
+        pts[e.pointerId].x = e.clientX;
+        pts[e.pointerId].y = e.clientY;
+        var t = two();
+        if (t) {
+          /* دو انگشت: فقط زوم، حول نقطه‌ی وسطشان */
+          pinching = true;
+          var d = dist(t[0], t[1]);
+          if (pinchD > 0 && d > 0) {
+            var mx = (t[0].x + t[1].x) / 2, my = (t[0].y + t[1].y) / 2;
+            var r = $('stage').getBoundingClientRect();
+            Sc.zoomBy(d / pinchD, mx - r.left, my - r.top);
+          }
+          pinchD = d;
+          return;
+        }
+        if (pid !== e.pointerId) return;
+        var dx = e.clientX - lx, dy = e.clientY - ly;
+        lx = e.clientX; ly = e.clientY;
+        moved += Math.abs(dx) + Math.abs(dy);
+        if (moved > 6) Sc.panBy(dx, dy);
+      });
+
+      function up(e) {
+        delete pts[e.pointerId];
+        if (Object.keys(pts).length < 2) pinchD = 0;
+        if (pid !== e.pointerId) return;
+        pid = null;
+        var wasPinch = pinching;
+        if (!Object.keys(pts).length) pinching = false;
+        if (wasPinch || St.isClosed() || moved > 12) return;
+        var w = Sc.toWorld(e.clientX, e.clientY);
+        if (tapGift(w.x, w.y)) return;
+        if (tapStation(w.x, w.y)) return;
+        serve(true, w.x, w.y);
+      }
+      z.addEventListener('pointerup', up);
+      z.addEventListener('pointercancel', function (e) {
+        delete pts[e.pointerId];
+        if (pid === e.pointerId) pid = null;
+      });
+
+      /* چرخ ماوس، برای وقتی که روی کامپیوتر باز می‌شود */
+      z.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        var r = $('stage').getBoundingClientRect();
+        Sc.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top);
+      }, { passive: false });
+    })();
+
     window.addEventListener('keydown', function (e) {
       if (e.code === 'Space' && !anyModal() && !UI.isSheetOpen()) { e.preventDefault(); serve(false); }
       if (e.code === 'Escape') UI.closeSheet();
@@ -934,6 +1244,12 @@
     buyPack: buyPack, packContents: packContents, claimSubChest: claimSubChest,
     buyItem: buyItem, watchAdForGems: watchAdForGems,
     tapGift: tapGift, claimGift: claimGift, claimGiftTripled: claimGiftTripled,
+    tapStation: tapStation, focusPart: focusPart, syncHot: syncHot,
+    toggleDish: toggleDish, setPrice: setPrice, buyLicence: buyLicence,
+    playMini: playMini, quitMini: quitMini,
+    saveShopName: saveShopName, useCode: useCode, goNextCity: goNextCity, syncNextCity: syncNextCity,
+    toggleCityView: toggleCityView,
+    makeCard: makeCard, saveCard: saveCard, sendCard: sendCard,
     debug: {
       grant: function (v) { S().money += v; S().total += v; disp = S().money; afterChange(); },
       gems: function (v) { St.addGems(v); afterChange(); },

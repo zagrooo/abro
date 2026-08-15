@@ -15,6 +15,20 @@
     keys.forEach(function (k) { o[k] = 0; });
     return o;
   }
+  /* هر ایستگاه یک آرایه به اندازه‌ی تکه‌هایش، همه صفر */
+  function zeroSub() {
+    var o = {};
+    IDS.forEach(function (id) {
+      var defs = D.SUBPARTS[id] || [];
+      o[id] = defs.map(function () { return 0; });
+    });
+    return o;
+  }
+  function noFocus() {
+    var o = {};
+    IDS.forEach(function (id) { o[id] = -1; });
+    return o;
+  }
 
   /* ───────── وضعیت یک دور ───────── */
   function newRun(meta) {
@@ -26,6 +40,13 @@
       money: start, total: 0, integ: 70, tier: 0, day: 0, hired: 0,
       staff: [],            /* [{r:نقش, g:درجه, at:ایستگاه یا ''}] */
       lvl: zero(IDS), crew: zero(IDS), people: people,
+      sub: zeroSub(),       /* سطح هر زیرقطعه — جمعشان همان lvl است */
+      subFocus: noFocus(),  /* تکه‌ای که خریدهای بعدی سراغش می‌روند، یا ‎-۱ */
+      menu: [],             /* غذاهای امشب */
+      price: 2,             /* پله‌ی قیمت — وسط، یعنی خنثی */
+      licDay: -999,         /* مجوز از چه روزی گرفته شده */
+      lastCheck: 0,         /* آخرین روزی که بازرسی شد */
+      regDay: {},           /* هر مشتری همیشگی آخرین بار کدام روز آمد */
       ing: 'normal', risk: 'mid', served: 0, goalsDone: 0,
       lastNote: '', ts: Date.now(), ended: 0,
       hour: 19,             /* ساعت بازی — شب شروع می‌شود، سرِ اوج */
@@ -48,6 +69,11 @@
       purchases: {},   /* شناسه‌ی بسته → زمان خرید (برای بسته‌های یک‌باره) */
       noAds: 0,        /* تبلیغ اجباری حذف شده */
       subUntil: 0,     /* پایان اشتراک صندوق روزانه */
+      shopName: '',    /* اسمی که بازیکن گذاشته — خالی یعنی اسم پرده */
+      codeSeed: 0,     /* بذر کد همسایه */
+      codesUsed: [],   /* کدهایی که قبلاً وارد شده */
+      miniDay: '',     /* روزی که سهمیه‌ی مینی‌گیم‌ها شمرده شده */
+      miniCount: {},   /* شناسه‌ی مینی‌گیم → چند بار امروز */
       subDay: ''       /* آخرین روزی که صندوق گرفته شده */
     };
   }
@@ -74,7 +100,369 @@
     return n;
   }
   function spaceCap() {
-    return Math.floor(tier().space * (1 + .10 * book('space'))) + (M.spaceBonus || 0);
+    return Math.floor(tier().space * (1 + .10 * book('space'))) + (M.spaceBonus || 0) + ruleAdd('space');
+  }
+
+  /* ───────── زیرقطعه‌ها ─────────
+     قرار اصلی: جمع سطح تکه‌ها همیشه برابر سطح ایستگاه است. تا وقتی
+     این برقرار باشد، نه نرخ عوض می‌شود و نه فضا — یعنی بالانس بازی
+     دست‌نخورده می‌ماند و همه‌ی این لایه فقط نمای رشد است. */
+  function subDefs(id) { return D.SUBPARTS[id] || []; }
+
+  /* چند تکه سرِ این سطح باز است — دست‌کم یکی، وگرنه سطح جایی ندارد */
+  function subOpenAt(id, lvl) {
+    var defs = subDefs(id), n = 0;
+    for (var i = 0; i < defs.length; i++) if (defs[i].at <= lvl) n++;
+    return Math.max(1, n);
+  }
+  function subSum(a) {
+    var n = 0;
+    for (var i = 0; i < a.length; i++) n += a[i];
+    return n;
+  }
+  /* آرایه‌ی خام، بدون هم‌گام‌سازی — برای جلوگیری از بازگشت بی‌پایان */
+  function subRaw(id) {
+    if (!S.sub) S.sub = zeroSub();
+    var defs = subDefs(id), a = S.sub[id];
+    if (!Array.isArray(a) || a.length !== defs.length) {
+      a = defs.map(function () { return 0; });
+      S.sub[id] = a;
+    }
+    return a;
+  }
+  /* n سطح تازه را بین تکه‌های باز پخش کن.
+     سطح‌به‌سطح جلو می‌رویم چون وسط یک خرید بزرگ ممکن است تکه‌ی
+     تازه‌ای باز شود و باید همان لحظه سهم بگیرد. */
+  function subPut(id, n) {
+    var defs = subDefs(id);
+    if (!defs.length || n <= 0) return;
+    var a = subRaw(id), f = subFocusOf(id);
+    for (var k = 0; k < n; k++) {
+      var open = subOpenAt(id, subSum(a)), idx;
+      if (f >= 0 && f < open) {
+        idx = f;
+      } else {
+        /* بدون انتخابِ بازیکن، تکه‌ی عقب‌مانده جلو می‌افتد تا
+           ایستگاه یک‌دست بالا برود نه لنگ */
+        idx = 0;
+        for (var i = 1; i < open; i++) if (a[i] < a[idx]) idx = i;
+      }
+      a[idx]++;
+    }
+  }
+  /* از صفر دوباره پخش کن — مهاجرت ذخیره‌ی قدیمی و ترمیم ناهماهنگی */
+  function subSpread(id) {
+    var a = subRaw(id);
+    for (var i = 0; i < a.length; i++) a[i] = 0;
+    subPut(id, S.lvl[id] | 0);
+  }
+  /* اگر جمع با سطح ایستگاه نخواند، از نو پخش می‌شود */
+  function subSync(id) {
+    var a = subRaw(id);
+    if (subSum(a) !== (S.lvl[id] | 0)) subSpread(id);
+    return a;
+  }
+  function subSyncAll() { IDS.forEach(subSync); }
+  function subLevels(id) { return subSync(id); }
+  function subFocusOf(id) {
+    if (!S.subFocus) S.subFocus = noFocus();
+    var f = S.subFocus[id];
+    return f == null ? -1 : f;
+  }
+  /* انتخاب تکه‌ی هدف. همان تکه را دوباره زدن یعنی برداشتن انتخاب. */
+  function setSubFocus(id, i) {
+    if (!S.subFocus) S.subFocus = noFocus();
+    var defs = subDefs(id);
+    if (i == null || i < 0 || i >= defs.length || defs[i].at > S.lvl[id]) { S.subFocus[id] = -1; return false; }
+    S.subFocus[id] = (S.subFocus[id] === i) ? -1 : i;
+    return true;
+  }
+  /* تکه‌ی بعدی که هنوز باز نشده — برای نشان دادن هدف بعدی */
+  function subNext(id) {
+    var defs = subDefs(id), lvl = S.lvl[id] | 0;
+    for (var i = 0; i < defs.length; i++) if (defs[i].at > lvl) return defs[i];
+    return null;
+  }
+  /* سطح خریده‌شده را هم به ایستگاه می‌دهد هم به تکه‌ها — تنها راه
+     درست بالا بردن سطح، تا جمع هیچ‌وقت از سطح جدا نیفتد */
+  function addLevels(id, n) {
+    n = Math.max(0, n | 0);
+    if (!n) return 0;
+    subSync(id);
+    S.lvl[id] += n;
+    subPut(id, n);
+    return n;
+  }
+
+  /* ───────── منو ─────────
+     منوی خالی دقیقاً خنثی است (ضریب ۱). یعنی بازیکنی که این تب را
+     باز نکند، همان بازی قبلی را دارد؛ کسی که باز کند، ساعت و هوا
+     برایش معنی پیدا می‌کند. */
+  function menuSlots() { return 2 + Math.floor(S.tier / 3); }
+  function menuOpen(d) { return S.tier >= d.tier; }
+  function menuList() { return S.menu || (S.menu = []); }
+  function menuHas(id) { return menuList().indexOf(id) >= 0; }
+  function menuDish(id) {
+    for (var i = 0; i < D.MENU.length; i++) if (D.MENU[i].id === id) return D.MENU[i];
+    return null;
+  }
+  function menuToggle(id) {
+    var d = menuDish(id);
+    if (!d || !menuOpen(d)) return false;
+    var list = menuList(), at = list.indexOf(id);
+    if (at >= 0) { list.splice(at, 1); return true; }
+    if (list.length >= menuSlots()) return false;
+    list.push(id);
+    return true;
+  }
+  /* این غذا همین حالا چقدر می‌ارزد: ساعتش خواند؟ هوایش خواند؟ */
+  function dishScore(d) {
+    var T = D.MENU_TUNE;
+    var mood = A.clock ? A.clock.bandAt(S.hour).mood : null;
+    var w = weather();
+    var hitB = d.bands.indexOf(mood) >= 0;
+    var hitW = !!w && d.wx.indexOf(w.id) >= 0;
+    if (!hitB && !hitW) return T.miss;
+    return (hitB ? T.band : 0) + (hitW ? T.weather : 0);
+  }
+  function menuMult() {
+    var list = menuList();
+    if (!list.length) return 1;
+    var T = D.MENU_TUNE, sum = 0;
+    for (var i = 0; i < list.length; i++) {
+      var d = menuDish(list[i]);
+      if (d && menuOpen(d)) sum += dishScore(d);
+    }
+    return clamp(1 + sum, T.lo, T.hi);
+  }
+
+  /* ───────── قیمت ─────────
+     گرانی مشتری را می‌پراند، مگر اینکه آبرو داشته باشی. */
+  function priceStep() { return clamp(S.price | 0, 0, D.PRICE_STEPS.length - 1); }
+  function priceInfo() { return D.PRICE_STEPS[priceStep()]; }
+  function setPrice(i) {
+    if (i == null || i < 0 || i >= D.PRICE_STEPS.length) return false;
+    S.price = i | 0;
+    return true;
+  }
+  /* چند درصد از مشتری‌ها با این قیمت می‌مانند */
+  function priceFlow() {
+    var T = D.PRICE_TUNE;
+    var sens = T.k * (1 - T.integShield * (S.integ / 100));
+    return Math.max(T.floor, 1 - (priceInfo().mul - 1) * sens);
+  }
+  /* اثر نهایی قیمت روی فروش: قیمت × مشتری */
+  function priceMult() { return priceInfo().mul * priceFlow(); }
+
+  /* ───────── رقیب ─────────
+     نواری که پر می‌شود. تا پرده‌ی سوم اصلاً به چشم نمی‌آید. */
+  function rivalPower() {
+    var R = D.RIVAL;
+    if (S.tier < R.fromTier) return 0;
+    var head = ruleAdd('rival');
+    return clamp(head + (S.day * R.perDay + (S.tier - R.fromTier) * R.perTier) / R.full, 0, 1);
+  }
+  function rivalMult() {
+    var R = D.RIVAL;
+    if (perkOn('raqib')) return 1;          /* رابطه‌ات با او کار را حل کرده */
+    var bite = R.bite * rivalPower();
+    if (priceStep() < 2) bite *= R.cheapRelief;   /* از او ارزان‌تری */
+    return 1 - bite;
+  }
+
+  /* ضریب فروش: منو × قیمت × رقیب. جدا از نرخ خام مانده تا دستمزد
+     که از rawRate می‌آید، از این‌ها اثر نگیرد. */
+  function sellMult() { return menuMult() * priceMult() * rivalMult() * ruleMul('sell'); }
+
+  /* ───────── مجوز و بازرسی ───────── */
+  function licenceCost() { return Math.floor(tier().cost * D.LICENCE.costShare * discount()) || 500; }
+  function licenceLeft() { return Math.max(0, (S.licDay + D.LICENCE.days) - S.day); }
+  function licenceOk() { return licenceLeft() > 0; }
+  function buyLicence() {
+    var c = licenceCost();
+    if (S.money < c) return 0;
+    S.money -= c;
+    S.licDay = S.day;
+    return c;
+  }
+  /* آیا امروز باید بازرسی بیاید */
+  function checkDue() {
+    var L = D.LICENCE;
+    if (S.day <= 0 || S.day === S.lastCheck) return false;
+    return S.day % L.every === 0;
+  }
+  /* نتیجه‌ی بازرسی — پول را همین‌جا کم می‌کند تا هیچ راهی برای
+     فراموش کردنش نماند */
+  function runCheck() {
+    var L = D.LICENCE;
+    S.lastCheck = S.day;
+    if (licenceOk()) {
+      shiftPeople({ bazres: 2 });
+      return { ok: true, fine: 0 };
+    }
+    var fine = Math.floor(rate() * L.fine * (S.integ < L.dirtyInteg ? 2 : 1) * ruleMul('fine'));
+    fine = Math.min(fine, Math.floor(S.money));
+    S.money -= fine;
+    shiftPeople({ bazres: -5 });
+    return { ok: false, fine: fine, dirty: S.integ < L.dirtyInteg };
+  }
+
+  /* ───────── مشتری‌های همیشگی ─────────
+     فقط اگر غذاشان روی منو باشد می‌آیند. یعنی این هم به همان
+     یک تصمیم وصل است، نه جایزه‌ی مفت. */
+  function regularDue() {
+    if (isClosed()) return null;
+    var h = S.hour;
+    for (var i = 0; i < D.REGULARS.length; i++) {
+      var r = D.REGULARS[i];
+      if (!menuHas(r.dish)) continue;
+      if ((S.regDay || (S.regDay = {}))[r.id] === S.day) continue;
+      /* پنجره‌ی یک‌ساعته‌ی خودش */
+      if (h >= r.hour && h < r.hour + 1) return r;
+    }
+    return null;
+  }
+  function takeRegular(r) {
+    if (!r) return 0;
+    if (!S.regDay) S.regDay = {};
+    S.regDay[r.id] = S.day;
+    var tip = Math.floor(rate() * r.tip);
+    S.money += tip; S.total += tip;
+    if (r.p) shiftPeople(r.p);
+    return tip;
+  }
+
+  /* ───────── تکمیل شهر ─────────
+     شهر وقتی تمام است که هم آخرین پرده رسیده باشد، هم هیچ ایستگاهی
+     خاموش نمانده باشد. یعنی «همه‌ی مغازه‌ها باز شد و همه‌ی مراحل
+     تمام شد» — تازه آن‌وقت شهر بعدی معنی دارد. */
+  function cityComplete() {
+    if (!isLast()) return false;
+    for (var i = 0; i < IDS.length; i++) if (!S.lvl[IDS[i]]) return false;
+    return true;
+  }
+  function cityProgress() {
+    var on = 0;
+    for (var i = 0; i < IDS.length; i++) if (S.lvl[IDS[i]]) on++;
+    return { acts: S.tier + 1, actsMax: D.TIERS.length, shops: on, shopsMax: IDS.length };
+  }
+
+  /* ───────── قید شهر ─────────
+     هر شهر همان دوازده پرده است با یک ضریب متفاوت. شهر اول خنثی
+     است، پس دور اول هیچ‌کس با قید روبه‌رو نمی‌شود. */
+  function city() { return A.world ? A.world.cityFor(M.runs || 0) : null; }
+  function cityRule() {
+    var c = city();
+    return (c && c.rule) || {};
+  }
+  function ruleMul(key) {
+    var v = cityRule()[key];
+    return typeof v === 'number' ? v : 1;
+  }
+  function ruleAdd(key) {
+    var v = cityRule()[key];
+    return typeof v === 'number' ? v : 0;
+  }
+
+  /* ───────── اسم مغازه ─────────
+     اسم مالِ خودِ بازیکن است و بین دورها می‌ماند، چون چیزی است که
+     می‌خواهد نشان بدهد. خالی یعنی همان اسم پرده. */
+  var NAME_MAX = 18;
+  function shopName() {
+    var n = (M.shopName || '').trim();
+    return n || tier().name;
+  }
+  function hasShopName() { return !!(M.shopName || '').trim(); }
+  function setShopName(s) {
+    s = String(s == null ? '' : s).replace(/[<>&"']/g, '').trim().slice(0, NAME_MAX);
+    M.shopName = s;
+    return s;
+  }
+
+  /* ───────── کد همسایه ─────────
+     بدون سرور، پس کد باید خودش خودش را تأیید کند: چهار حرف از روی
+     بذر، به‌علاوه یک رقم درستی‌سنج. کدِ خودت روی خودت کار نمی‌کند و
+     هر کد فقط یک‌بار.
+
+     این عمداً «دعوت» نیست: هیچ‌چیز از دفترچه‌ی مخاطبان خوانده
+     نمی‌شود و هیچ پیامی خودکار نمی‌رود. بازیکن کد را خودش می‌فرستد. */
+  var CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  function codeFrom(seed) {
+    var rng = U.seeded(seed | 0), s = '';
+    for (var i = 0; i < 5; i++) s += CODE_ABC[Math.floor(rng() * CODE_ABC.length)];
+    var sum = 0;
+    for (var j = 0; j < s.length; j++) sum += s.charCodeAt(j) * (j + 3);
+    return s + CODE_ABC[sum % CODE_ABC.length];
+  }
+  function codeValid(c) {
+    c = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (c.length !== 6) return false;
+    var body = c.slice(0, 5), sum = 0;
+    for (var j = 0; j < body.length; j++) sum += body.charCodeAt(j) * (j + 3);
+    return CODE_ABC[sum % CODE_ABC.length] === c[5];
+  }
+  /* کد خودِ بازیکن — از یک بذر ثابت که یک‌بار ساخته می‌شود */
+  function myCode() {
+    if (!M.codeSeed) M.codeSeed = Math.floor(Math.random() * 1e9) + 1;
+    return codeFrom(M.codeSeed);
+  }
+  function codesUsed() { return M.codesUsed || (M.codesUsed = []); }
+  function redeemCode(raw) {
+    var c = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!codeValid(c)) return { ok: false, why: 'bad' };
+    if (c === myCode()) return { ok: false, why: 'self' };
+    if (codesUsed().indexOf(c) >= 0) return { ok: false, why: 'used' };
+    if (codesUsed().length >= 10) return { ok: false, why: 'max' };
+    codesUsed().push(c);
+    addGems(15);
+    return { ok: true, gems: 15 };
+  }
+
+  /* ───────── مینی‌گیم‌ها ─────────
+     سهمیه روی روز واقعی است نه روز بازی، چون روز بازی فقط با بستن
+     شیفت جلو می‌رود و بازیکنی که هیچ‌وقت نمی‌بندد سهمیه‌اش پر
+     نمی‌شد. همان روال سهمیه‌ی تبلیغ. */
+  function miniDef(id) {
+    for (var i = 0; i < D.MINIS.length; i++) if (D.MINIS[i].id === id) return D.MINIS[i];
+    return null;
+  }
+  function miniCounts() {
+    if (M.miniDay !== today()) { M.miniDay = today(); M.miniCount = {}; }
+    return M.miniCount || (M.miniCount = {});
+  }
+  function miniOpen(id) {
+    var d = miniDef(id);
+    return !!d && S.tier >= d.minTier;
+  }
+  function miniLeft(id) {
+    var d = miniDef(id);
+    if (!d) return 0;
+    if (!miniOpen(id)) return 0;
+    return Math.max(0, d.perDay - (miniCounts()[id] || 0));
+  }
+  function miniUse(id) {
+    if (miniLeft(id) <= 0) return false;
+    var c = miniCounts();
+    c[id] = (c[id] || 0) + 1;
+    return true;
+  }
+  /* نمره‌ی صفر تا یک → پول. کف دارد تا بازی بد هم دست خالی نماند. */
+  function miniPay(id, score) {
+    var d = miniDef(id), P = D.MINI_PAY;
+    if (!d) return 0;
+    var s = clamp(Number(score) || 0, 0, 1);
+    var secs = (P[id] || 60) * (P.floor + (1 - P.floor) * s);
+    return Math.max(P.minMoney, Math.floor(rate() * secs));
+  }
+  /* جایزه را همین‌جا می‌دهد تا هیچ مسیری برای دوبار گرفتن نماند */
+  function miniReward(id, score) {
+    var d = miniDef(id);
+    if (!d) return null;
+    var cash = miniPay(id, score);
+    S.money += cash; S.total += cash;
+    var gems = 0;
+    if (d.gem && score >= .6) { addGems(d.gem); gems = d.gem; }
+    return { cash: cash, gems: gems };
   }
 
   /* ───────── نیرو ───────── */
@@ -185,7 +573,7 @@
   function wage() {
     var base = wageBase(), list = staffAll(), sum = 0;
     for (var i = 0; i < list.length; i++) sum += base * ST().wageFactor(list[i]);
-    return Math.floor(sum * ST().globalEffect(staffGlobal(), 'wage'));
+    return Math.floor(sum * ST().globalEffect(staffGlobal(), 'wage') * ruleMul('wage'));
   }
 
   /* ───────── ضریب‌ها ───────── */
@@ -242,7 +630,7 @@
   function demandMult() {
     return (A.clock ? A.clock.demandAt(S.hour) : 1) * worldMult();
   }
-  function rate() { return rawRate() * boostMult() * demandMult(); }
+  function rate() { return rawRate() * boostMult() * demandMult() * sellMult(); }
 
   /* یک سطح بیشتر از این ایستگاه چقدر به نرخ اضافه می‌کند؟
      چون «جا» محدود است، این عدد معیار درست خرید است، نه قیمت. */
@@ -293,7 +681,7 @@
   /* جمع سری هندسی به‌جای حلقه.
      حلقه‌ی قبلی تا ۱۴۲ بار Math.pow می‌زد و چون شش بار در ثانیه برای
      دوازده ایستگاه اجرا می‌شد، روی موبایل ده هزار pow در ثانیه می‌شد.
-     اختلاف با جمع دقیق کمتر از n تومان است — در برابر میلیاردها هیچ. */
+     اختلاف با جمع دقیق کمتر از n ایر است — در برابر میلیاردها هیچ. */
   function bulkCost(s, n) {
     if (n <= 0) return 0;
     if (n === 1) return upCost(s, 0);
@@ -322,7 +710,7 @@
     var k = Math.min(+mult || 1, space);
     return { n: k, c: bulkCost(s, k), full: false };
   }
-  function tierCost() { return Math.floor(tier().cost * discount()); }
+  function tierCost() { return Math.floor(tier().cost * discount() * ruleMul('tierCost')); }
   function tierReq() { return tier().req || 0; }
   function tierBlocked() {
     if (!tier().next) return 'last';
@@ -369,7 +757,7 @@
 
   function doPrestige() {
     var g = abrooGain();
-    /* تقویتی که با الماس خریده شده نباید با واگذاری بسوزد */
+    /* تقویتی که با فیروزه خریده شده نباید با واگذاری بسوزد */
     var keepBoost = S.boostUntil || 0;
     M.abroo += g;
     M.abrooTotal += g;
@@ -380,7 +768,7 @@
     return g;
   }
 
-  /* ───────── الماس و سهمیه‌ی روزانه ───────── */
+  /* ───────── فیروزه و سهمیه‌ی روزانه ───────── */
   var AD_PER_DAY = 5;
   function today() {
     var d = new Date();
@@ -510,6 +898,22 @@
       var l = base.lvl[id], cap = l ? 1 + Math.floor((l - 1) / 7) : 0;
       base.crew[id] = Math.min(base.crew[id], cap);
     });
+
+    /* ───── زیرقطعه‌ها ─────
+       ذخیره‌ی قبل از v2.9.0 اصلاً `sub` ندارد. هرچه بیاید پاک‌سازی
+       می‌شود و اگر جمعش با سطح ایستگاه نخواند، `subSyncAll` بعد از
+       نشستن وضعیت از نو پخشش می‌کند. پس ذخیره‌ی قدیمی هم بدون
+       هیچ سطح گم‌شده‌ای بالا می‌آید. */
+    base.sub = {}; base.subFocus = {};
+    IDS.forEach(function (id) {
+      var defs = D.SUBPARTS[id] || [];
+      var got = raw.sub && raw.sub[id];
+      base.sub[id] = defs.map(function (d, i) {
+        return Math.max(0, Math.floor(num(Array.isArray(got) ? got[i] : 0, 0)));
+      });
+      var f = Math.floor(num(raw.subFocus && raw.subFocus[id], -1));
+      base.subFocus[id] = (f >= 0 && f < defs.length && defs[f].at <= base.lvl[id]) ? f : -1;
+    });
     var over = IDS.reduce(function (a, i) { return a + base.crew[i]; }, 0) - base.hired;
     IDS.forEach(function (id) {
       while (over > 0 && base.crew[id] > 0) { base.crew[id]--; over--; }
@@ -550,6 +954,25 @@
       var p = D.PEOPLE.find(function (x) { return x.id === id; });
       base.people[id] = clamp(num(raw.people && raw.people[id], p.start), 0, 100);
     });
+    /* ───── منو، قیمت، مجوز ───── */
+    base.menu = [];
+    if (Array.isArray(raw.menu)) {
+      raw.menu.slice(0, 24).forEach(function (id) {
+        var d = D.MENU.filter(function (x) { return x.id === id; })[0];
+        if (d && d.tier <= base.tier && base.menu.indexOf(id) < 0) base.menu.push(id);
+      });
+    }
+    /* اگر پرده پایین آمده یا جدول عوض شده، منو نباید از ظرفیت بزند */
+    var slots = 2 + Math.floor(base.tier / 3);
+    if (base.menu.length > slots) base.menu = base.menu.slice(0, slots);
+    base.price = clamp(Math.floor(num(raw.price, 2)), 0, D.PRICE_STEPS.length - 1);
+    base.licDay = Math.floor(num(raw.licDay, -999));
+    base.lastCheck = Math.max(0, Math.floor(num(raw.lastCheck, 0)));
+    base.regDay = {};
+    D.REGULARS.forEach(function (r) {
+      var v = Math.floor(num(raw.regDay && raw.regDay[r.id], -1));
+      if (v >= 0) base.regDay[r.id] = v;
+    });
     if (D.ING[raw.ing]) base.ing = raw.ing;
     if (D.RISK[raw.risk]) base.risk = raw.risk;
     if (typeof raw.lastNote === 'string') base.lastNote = raw.lastNote.slice(0, 200);
@@ -577,6 +1000,21 @@
     if (m.abrooTotal < m.abroo) m.abrooTotal = m.abroo;
     m.gfx = clamp(Math.floor(num(raw.gfx, 2)), 0, 2);
     if (typeof raw.adDay === 'string') m.adDay = raw.adDay.slice(0, 12);
+    if (typeof raw.miniDay === 'string') m.miniDay = raw.miniDay.slice(0, 12);
+    if (typeof raw.shopName === 'string') m.shopName = raw.shopName.replace(/[<>&"']/g, '').trim().slice(0, 18);
+    m.codeSeed = Math.max(0, Math.floor(num(raw.codeSeed, 0)));
+    if (Array.isArray(raw.codesUsed)) {
+      m.codesUsed = raw.codesUsed
+        .filter(function (c) { return typeof c === 'string' && /^[A-Z0-9]{6}$/.test(c); })
+        .slice(0, 10);
+    }
+    /* فقط شناسه‌های شناخته‌شده، و هر عدد در بازه‌ی سهمیه‌ی خودش */
+    if (raw.miniCount && typeof raw.miniCount === 'object') {
+      D.MINIS.forEach(function (g) {
+        var n = Math.floor(num(raw.miniCount[g.id], 0));
+        if (n > 0) m.miniCount[g.id] = clamp(n, 0, g.perDay);
+      });
+    }
     D.BOOK.forEach(function (n) {
       m.book[n.id] = clamp(Math.floor(num(raw.book && raw.book[n.id], 0)), 0, n.max);
     });
@@ -592,6 +1030,7 @@
     if (!raw || !raw.s) return false;
     M = adoptMeta(raw.m);
     S = adoptRun(raw.s);
+    subSyncAll();
     return true;
   }
 
@@ -609,6 +1048,9 @@
     tier: tier, isLast: isLast, book: book, stand: stand, perkOn: perkOn,
     isClosed: isClosed, boostLeft: boostLeft, boostMult: boostMult,
     spaceUsed: spaceUsed, spaceCap: spaceCap,
+    subDefs: subDefs, subLevels: subLevels, subSync: subSync, subSyncAll: subSyncAll,
+    subOpenAt: subOpenAt, subFocusOf: subFocusOf, setSubFocus: setSubFocus,
+    subNext: subNext, addLevels: addLevels,
     crewFree: crewFree, crewUsed: crewUsed, crewNeed: crewNeed,
     crewPower: crewPower, understaffed: understaffed, autoAssign: autoAssign,
     staffAll: staffAll, staffAt: staffAt, staffIdle: staffIdle,
@@ -617,6 +1059,14 @@
     hireCost: hireCost, wage: wage, wageBase: wageBase,
     abrooMult: abrooMult, integMult: integMult,
     stationRate: stationRate, rate: rate, rawRate: rawRate, tapValue: tapValue,
+    menuSlots: menuSlots, menuOpen: menuOpen, menuList: menuList, menuHas: menuHas,
+    menuDish: menuDish, menuToggle: menuToggle, menuMult: menuMult, dishScore: dishScore,
+    priceStep: priceStep, priceInfo: priceInfo, setPrice: setPrice,
+    priceFlow: priceFlow, priceMult: priceMult, sellMult: sellMult,
+    rivalPower: rivalPower, rivalMult: rivalMult,
+    licenceCost: licenceCost, licenceLeft: licenceLeft, licenceOk: licenceOk,
+    buyLicence: buyLicence, checkDue: checkDue, runCheck: runCheck,
+    regularDue: regularDue, takeRegular: takeRegular,
     demandMult: demandMult, worldMult: worldMult,
     weather: weather, occasion: occasion, todayWorld: todayWorld,
     city: function () { return A.world ? A.world.cityFor(M.runs || 0) : null; },
@@ -629,6 +1079,11 @@
     hasPurchase: hasPurchase, recordPurchase: recordPurchase, packAvailable: packAvailable,
     subActive: subActive, subDaysLeft: subDaysLeft,
     subChestReady: subChestReady, claimSubChest: claimSubChest, adsDisabled: adsDisabled,
+    cityComplete: cityComplete, cityProgress: cityProgress,
+    cityRule: cityRule, shopName: shopName, hasShopName: hasShopName, setShopName: setShopName,
+    myCode: myCode, codeValid: codeValid, redeemCode: redeemCode, codesUsed: codesUsed,
+    miniDef: miniDef, miniOpen: miniOpen, miniLeft: miniLeft, miniUse: miniUse,
+    miniPay: miniPay, miniReward: miniReward,
     checkBadges: checkBadges, hasBadge: hasBadge,
     save: save, load: load, wipe: wipe, hadOldSave: hadOldSave, dropOldSaves: dropOldSaves
   };

@@ -8,40 +8,116 @@
 .ui>*{pointer-events:auto}
 .grow{flex:1;pointer-events:auto}
 
-/* ══ نوار بالا ══ */
-.topbar{display:flex;gap:6px;align-items:center}
-.pill{
-  display:flex;align-items:center;gap:7px;height:38px;padding:0 12px 0 8px;border-radius:19px;
-  background:linear-gradient(180deg,rgba(31,41,61,.94),rgba(14,19,30,.95));
-  border:1px solid var(--line2);backdrop-filter:var(--glass);
-  box-shadow:var(--sh-1),inset 0 1px 0 rgba(255,255,255,.07);
-  transition:transform .3s var(--spring);
+/* ══════════ نوار ارز ══════════
+   سلسله‌مراتب: پول بزرگ و روشن، دو ارز دیگر کوچک‌تر، بقیه‌ی اعداد
+   اصلاً این‌جا نیستند. قبلاً هفت‌تا عدد کنار هم بودند و چشم
+   نمی‌دانست کجا را نگاه کند. */
+.hudtop{display:flex;gap:7px;align-items:center}
+.cash,.cur{
+  display:flex;align-items:center;gap:7px;height:40px;padding:0 13px 0 7px;border-radius:20px;
+  background:linear-gradient(180deg,rgba(24,33,50,.97),rgba(11,16,26,.98));
+  border:1px solid rgba(120,150,200,.16);
+  box-shadow:0 6px 18px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.08);
 }
-.pill .ic{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;flex:none}
-.pill.money .ic{background:radial-gradient(circle at 34% 28%,#fff0c8,#f0c164 45%,#b8862f);box-shadow:0 0 10px rgba(233,185,106,.45)}
-.pill.abroo .ic{background:radial-gradient(circle at 34% 28%,#cfe6ff,#7fb2e4 45%,#3d6f9e);box-shadow:0 0 10px rgba(99,164,224,.4)}
-.pill .ic svg{width:13px;height:13px;fill:#2a1a04;opacity:.72}
-.pill.abroo .ic svg{fill:#07131f}
-.pill b{font-size:14px;font-weight:700;letter-spacing:.2px}
-.pill.sm{padding:0 9px 0 6px;gap:5px}
-.pill.sm b{font-size:12.5px}
-.pill.sm .ic{width:19px;height:19px}
-.pill.sm .ic svg{width:11px;height:11px}
-.pill.gem .ic{background:radial-gradient(circle at 34% 28%,#cfe6ff,#7fb6ea 45%,#3d78b8);
-  box-shadow:0 0 10px rgba(127,182,234,.45)}
-.pill.gem .ic svg{fill:#07131f}
-.pill.money{flex:1;min-width:0}
-.pill.money b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pill.bump{animation:pillBump .36s var(--spring)}
-@keyframes pillBump{40%{transform:scale(1.08)}}
+.cash{flex:1;min-width:0}
+.cash b{font-size:16px;font-weight:800;letter-spacing:.3px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
+  background:linear-gradient(180deg,#fff3d4,#e9b96a);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.cur{padding-inline-end:5px}
+.cur b{font-size:13px;font-weight:800}
+.cash .ic,.cur .ic{width:26px;height:26px;flex:none;border-radius:50%;display:grid;place-items:center}
+.cash .ic{background:radial-gradient(circle at 34% 28%,#fff0c8,#f0c164 45%,#b8862f);
+  box-shadow:0 0 14px rgba(233,185,106,.5),inset 0 -2px 4px rgba(120,70,10,.5)}
+.cur.gem .ic{background:radial-gradient(circle at 34% 28%,#d8f0ff,#6fc3ea 45%,#2f7fb8);
+  box-shadow:0 0 14px rgba(111,195,234,.45),inset 0 -2px 4px rgba(10,60,90,.5)}
+.cur.abroo .ic{background:radial-gradient(circle at 34% 28%,#ffe6c8,#d6a468 45%,#8a6234);
+  box-shadow:0 0 12px rgba(214,164,104,.4),inset 0 -2px 4px rgba(80,50,10,.5)}
+.cash .ic svg,.cur .ic svg{width:14px;height:14px;fill:none;stroke:rgba(30,18,4,.75);
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.plus{
+  width:22px;height:22px;flex:none;border-radius:50%;font-size:15px;font-weight:800;line-height:1;
+  background:linear-gradient(180deg,#5fd07a,#2f9a52);color:#04170b;
+  box-shadow:0 2px 6px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.3);
+}
+.plus:active{transform:scale(.9)}
+.cash.bump,.cur.bump{animation:pillBump .36s var(--spring)}
+@keyframes pillBump{40%{transform:scale(1.07)}}
 
-.iconbtn{
-  width:38px;height:38px;flex:none;border-radius:13px;display:grid;place-items:center;
-  background:rgba(17,23,35,.9);border:1px solid var(--line);backdrop-filter:var(--glass);transition:.16s;
+/* ══ ساعت ══ */
+.hudclock{
+  margin-top:6px;display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:14px;
+  background:linear-gradient(180deg,rgba(20,28,44,.86),rgba(10,15,24,.9));
+  border:1px solid rgba(120,150,200,.12);backdrop-filter:var(--glass);
 }
-.iconbtn svg{width:18px;height:18px;fill:none;stroke:var(--dim);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-.iconbtn.on svg{stroke:var(--gold)}
-.iconbtn:active{transform:scale(.9)}
+.ck-i{width:26px;height:26px;flex:none;border-radius:9px;display:grid;place-items:center;
+  background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.ck-i svg{width:14px;height:14px;fill:none;stroke:var(--dim);stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+.ck-i.on svg{stroke:var(--gold)}
+.hudclock .ck-date{margin-inline-start:auto}
+
+/* ══ کارت وضعیت ══ */
+.statuscard{
+  margin-top:6px;padding:10px 12px;border-radius:var(--r-m);
+  background:linear-gradient(180deg,rgba(22,30,46,.96),rgba(11,16,26,.97));
+  border:1px solid var(--line2);backdrop-filter:var(--glass);
+  animation:dropIn .26s var(--ease);
+}
+.st-row{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:10.5px;color:var(--dim2);margin-bottom:5px}
+.st-row b{font-size:12.5px;color:var(--ink);font-weight:700}
+.st-row+.track{margin-bottom:9px}
+.st-chips{display:flex;gap:5px;margin-top:8px}
+
+/* ══════════ ریل‌های کناری ══════════
+   جای تب‌های پایین را گرفتند. دلیلش ساده است: پایینِ صفحه جایی
+   است که مغازه دیده می‌شود، و انگشت هم همان‌جاست. */
+.rail{
+  position:absolute;top:50%;transform:translateY(-50%);z-index:20;
+  display:flex;flex-direction:column;gap:9px;pointer-events:auto;
+}
+.rail.left{inset-inline-start:8px}
+.rail.right{inset-inline-end:8px}
+.rbtn{
+  position:relative;width:52px;height:52px;border-radius:16px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  background:linear-gradient(180deg,rgba(30,41,62,.94),rgba(13,19,30,.96));
+  border:1px solid rgba(120,150,200,.16);
+  box-shadow:0 8px 20px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07);
+  transition:transform .16s var(--spring),border-color .2s;
+}
+.rbtn svg{width:20px;height:20px;fill:none;stroke:#b9c6da;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.rbtn em{font-size:8.5px;font-style:normal;color:var(--dim2);letter-spacing:.2px}
+.rbtn:active{transform:scale(.92)}
+.rbtn.sel{border-color:var(--gold);
+  background:linear-gradient(180deg,#2e2a1a,#1d1a12)}
+.rbtn.sel svg{stroke:var(--gold-l)}
+.rbtn.sel em{color:var(--gold)}
+.rbtn .badge{
+  position:absolute;top:-3px;inset-inline-end:-3px;width:11px;height:11px;border-radius:50%;
+  background:#e0604a;border:2px solid #0b1220;
+  animation:badgePop .3s var(--spring);
+}
+@keyframes badgePop{from{transform:scale(0)}}
+
+/* ══ نوار پایین ══ */
+.fabrow{
+  margin-top:auto;display:flex;align-items:flex-end;justify-content:center;gap:12px;
+  padding-bottom:4px;
+}
+.shiftbtn,.zoombtn{
+  width:56px;height:56px;border-radius:18px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:3px;font-size:9px;color:var(--dim);
+  background:linear-gradient(180deg,rgba(30,41,62,.94),rgba(13,19,30,.96));
+  border:1px solid rgba(120,150,200,.16);
+  box-shadow:0 8px 20px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07);
+}
+.shiftbtn svg,.zoombtn svg{width:19px;height:19px;fill:none;stroke:var(--gold);
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.zoombtn svg{stroke:#8fb8e0}
+.shiftbtn:active,.zoombtn:active{transform:scale(.93)}
 
 /* ══ نوار پرده ══ */
 .ribbon{margin-top:7px;display:flex;gap:6px}
@@ -286,6 +362,47 @@
 .c-meta{font-size:10.5px;color:var(--dim);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .c-bar{height:3px;margin-top:6px;border-radius:99px;background:#0a0f18;overflow:hidden}
 .c-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold-d),var(--gold-l));transition:width .4s var(--ease)}
+
+/* ══ منو و قیمت ══ */
+.card.picked{border-color:rgba(233,185,106,.45);background:linear-gradient(180deg,#241f13,#181510)}
+.card.dish .c-ico svg{stroke:#e0c37a}
+.pbar{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:8px}
+.pstep{padding:9px 4px;border-radius:var(--r-m);font-size:10.5px;font-weight:700;
+  background:var(--pan2);border:1px solid var(--line);color:var(--dim);transition:.14s}
+.pstep:active{transform:scale(.95)}
+.pstep.on{background:linear-gradient(180deg,var(--gold-l),var(--gold-d));color:#241604;border-color:var(--gold)}
+.regrow{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:5px;
+  border-radius:var(--r-m);background:var(--pan2);border:1px solid var(--line)}
+.regrow b{font-size:11.5px;font-weight:700}
+.regrow span{font-size:10px;color:var(--dim2)}
+.regrow i{margin-inline-start:auto;font-size:9.5px;font-style:normal;color:var(--gold)}
+.regrow.off{opacity:.45}
+.regrow.off i{color:var(--dim2)}
+
+/* ══ تکه‌های هر ایستگاه ══ */
+.cwrap{margin-bottom:7px}
+.cwrap .card{margin-bottom:0}
+.cwrap.open .card{border-color:rgba(233,185,106,.3);border-end-start-radius:0;border-end-end-radius:0}
+.caret{width:0;height:0;flex:none;margin-inline-start:auto;
+  border:4px solid transparent;border-top-color:var(--dim2);
+  transform:translateY(2px);transition:transform .2s var(--ease)}
+.cwrap.open .caret{transform:rotate(180deg)}
+.card.locked .caret{display:none}
+.subgrid{padding:9px 10px 10px;background:#0b1019;
+  border:1px solid var(--line);border-top:0;
+  border-radius:0 0 var(--r-l) var(--r-l)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
+.spart{display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  padding:7px 8px;border-radius:var(--r-m);text-align:start;
+  background:var(--pan2);border:1px solid var(--line);transition:.14s}
+.spart b{font-size:11px;font-weight:700}
+.spart span{font-size:9.5px;color:var(--dim2)}
+.spart:active{transform:scale(.95)}
+.spart.on{border-color:var(--gold);background:linear-gradient(180deg,#2a2416,#1a1810)}
+.spart.on span{color:var(--gold)}
+.spart.lock{opacity:.4;filter:saturate(.2)}
+.snote{font-size:10.5px;color:var(--dim);line-height:1.9;margin-top:9px}
+.snote b{color:var(--gold)}
 
 .crewrow{display:flex;align-items:center;gap:8px;margin-top:6px}
 /* ناحیه‌ی لمس واقعی ۴۴ پیکسل است؛ ظاهرش ۲۸ می‌ماند */
@@ -617,3 +734,89 @@
   border-top:0;border-inline-start:0;transform:rotate(45deg)}
 .coach.down::after{bottom:-7px;left:50%;margin-left:-6px}
 .coach.up::after{top:-7px;left:50%;margin-left:-6px;transform:rotate(225deg)}
+
+/* ══ کوچه‌ی من ══ */
+.namebox{display:flex;gap:6px;margin-bottom:8px}
+.namebox input{flex:1;padding:12px;border-radius:var(--r-m);background:var(--pan2);
+  border:1px solid var(--line);color:var(--ink);font:inherit;font-size:13px;text-align:center}
+.namebox input::placeholder{color:var(--dim2)}
+.namebox button{padding:12px 18px;border-radius:var(--r-m);font-size:12.5px;font-weight:800;
+  background:linear-gradient(180deg,var(--gold-l),var(--gold-d));color:#241604}
+.namebox button:active{transform:scale(.96)}
+.note.tiny{font-size:10.5px;color:var(--dim2)}
+.cardgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px}
+.cardbtn{padding:13px 10px;border-radius:var(--r-m);text-align:start;
+  background:var(--pan2);border:1px solid var(--line);color:var(--ink)}
+.cardbtn:active{transform:scale(.97)}
+.cardbtn b{display:block;font-size:12.5px;margin-bottom:3px}
+.cardbtn i{font-size:10px;color:var(--dim2);font-style:normal}
+
+/* ══ پنل بخش (تپ روی خودِ مغازه) ══ */
+.secpanel{
+  position:absolute;left:0;right:0;bottom:0;z-index:30;
+  padding:12px 12px calc(12px + env(safe-area-inset-bottom));
+  border-radius:20px 20px 0 0;
+  background:linear-gradient(180deg,#1a2333,#0d131e);
+  border-top:1px solid var(--line2);
+  box-shadow:0 -18px 50px rgba(0,0,0,.6);
+  animation:spUp .3s var(--spring) both;
+}
+@keyframes spUp{from{transform:translateY(104%)}}
+.sp-head{display:flex;align-items:center;gap:9px;margin-bottom:11px}
+.sp-ic{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;
+  background:rgba(233,185,106,.14)}
+.sp-ic svg{width:17px;height:17px;fill:none;stroke:var(--gold);stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.sp-head b{font-size:15px;font-weight:800}
+.sp-x{margin-inline-start:auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  background:var(--pan2);border:1px solid var(--line)}
+.sp-x svg{width:14px;height:14px;fill:none;stroke:var(--dim);stroke-width:2.2;stroke-linecap:round}
+.sp-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:9px}
+.sp-stats div{padding:8px 6px;border-radius:var(--r-m);text-align:center;
+  background:var(--pan2);border:1px solid var(--line)}
+.sp-stats span{display:block;font-size:9.5px;color:var(--dim2);margin-bottom:3px}
+.sp-stats b{font-size:13px;color:var(--gold);font-variant-numeric:tabular-nums}
+.sp-track{position:relative;height:16px;border-radius:8px;background:#070b12;
+  border:1px solid #1b2434;overflow:hidden;margin-bottom:10px}
+.sp-track i{display:block;height:100%;
+  background:repeating-linear-gradient(90deg,var(--gold-d) 0 7px,transparent 7px 10px);
+  transition:width .4s var(--ease)}
+.sp-track em{position:absolute;inset:0;display:grid;place-items:center;
+  font-size:9.5px;font-style:normal;font-weight:700;color:var(--ink)}
+.sp-main{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.sp-lvl{width:44px;height:44px;flex:none;border-radius:var(--r-m);display:grid;place-items:center;
+  background:linear-gradient(180deg,#2a3446,#161d29);border:1px solid var(--line2);
+  font-size:17px;font-weight:800;color:var(--gold)}
+.sp-desc{flex:1;min-width:0}
+.sp-desc b{display:block;font-size:12.5px;margin-bottom:2px}
+.sp-desc i{font-size:10px;color:var(--dim2);font-style:normal}
+.sp-buy{padding:13px 15px;border-radius:var(--r-m);flex:none;text-align:center;
+  background:var(--pan2);border:1px solid var(--line);color:var(--dim)}
+.sp-buy.can{background:linear-gradient(180deg,var(--gold-l),var(--gold-d));color:#241604;border-color:var(--gold)}
+.sp-buy span{display:block;font-size:12px;font-weight:800}
+.sp-buy b{font-size:10.5px;opacity:.85}
+.sp-buy:active{transform:scale(.96)}
+.sp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;max-height:31vh;overflow-y:auto}
+.sp-cell{aspect-ratio:1;border-radius:var(--r-m);padding:5px 3px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  background:var(--pan2);border:1px solid var(--line)}
+.sp-cell .sp-cn{font-size:8.5px;color:var(--dim);line-height:1.3;text-align:center}
+.sp-cell .sp-cl{font-size:11px;font-weight:800;color:var(--gold)}
+.sp-cell.sel{border-color:var(--gold);background:linear-gradient(180deg,#2a2113,#181410)}
+.sp-cell.off{opacity:.4}
+.sp-cell.off .sp-cl{color:var(--dim2);font-size:8.5px}
+.sp-cell:active{transform:scale(.95)}
+
+/* ══ شهر بعدی ══ */
+.nextcity{
+  margin-top:7px;display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:var(--r-m);
+  background:linear-gradient(180deg,rgba(30,52,38,.94),rgba(14,26,19,.95));
+  border:1px solid rgba(120,240,150,.35);backdrop-filter:var(--glass);
+  animation:dropIn .4s var(--ease);
+}
+.nextcity svg{width:18px;height:18px;flex:none;fill:none;stroke:#9ff0b4;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.nextcity span{flex:1;text-align:start;font-size:11.5px;font-weight:700;color:#cfe8d6}
+.nextcity b{font-size:11px;color:#9ff0b4;flex:none}
+.nextcity b i{font-style:normal}
+.nextcity:active{transform:scale(.98)}

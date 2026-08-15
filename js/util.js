@@ -2,7 +2,7 @@
    آبرو — ابزارهای پایه
    ═══════════════════════════════════════════════ */
 window.ABRO = window.ABRO || {};
-window.ABRO.VERSION = '2.8.0';
+window.ABRO.VERSION = '4.1.0';
 
 (function (A) {
   'use strict';
@@ -16,6 +16,14 @@ window.ABRO.VERSION = '2.8.0';
   function rnd(a, b) { return a + Math.random() * (b - a); }
   function pick(arr) { return arr[Math.random() * arr.length | 0]; }
   function sep(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '٬'); }
+  /* درجا بُر می‌خورد و همان آرایه را برمی‌گرداند */
+  function shuffle(a) {
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.random() * (i + 1) | 0;
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
 
   /* واحدهای فارسی برای عددهای بزرگ */
   var UNITS = [
@@ -142,7 +150,7 @@ window.ABRO.VERSION = '2.8.0';
   }
 
   A.util = {
-    fa: fa, $: $, clamp: clamp, lerp: lerp, rnd: rnd, pick: pick,
+    fa: fa, $: $, clamp: clamp, lerp: lerp, rnd: rnd, pick: pick, shuffle: shuffle,
     money: money, short: short, pct: pct, timeAgo: timeAgo,
     reduceMotion: reduceMotion, buzz: buzz, toast: toast, flyCoins: flyCoins,
     offscreen: offscreen, roundRect: roundRect, seeded: seeded, mix: mix

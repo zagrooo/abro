@@ -7,11 +7,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="description" content="آبرو — از یک چرخ دستی تا یک زنجیره. بازی مدیریتی درباره‌ی اینکه سر راه چقدر از خودت را جا می‌گذاری.">
 <title>آبرو</title>
-<link rel="stylesheet" href="css/fonts.css?v=2.8.0">
-<link rel="stylesheet" href="css/base.css?v=2.8.0">
-<link rel="stylesheet" href="css/loader.css?v=2.8.0">
-<link rel="stylesheet" href="css/ui.css?v=2.8.0">
-<link rel="stylesheet" href="css/modals.css?v=2.8.0">
+<link rel="stylesheet" href="css/fonts.css?v=4.1.0">
+<link rel="stylesheet" href="css/base.css?v=4.1.0">
+<link rel="stylesheet" href="css/loader.css?v=4.1.0">
+<link rel="stylesheet" href="css/ui.css?v=4.1.0">
+<link rel="stylesheet" href="css/modals.css?v=4.1.0">
 </head>
 <body>
 
@@ -23,7 +23,7 @@
   <div class="ld-ground"></div>
 
   <div class="ld-in">
-    <div class="ld-logo">آبرو</div>
+    <div class="ld-logo" data-t="آبرو">آبرو</div>
     <div class="ld-sub">از یک چرخ تا یک زنجیره</div>
 
     <div class="ld-cart">
@@ -57,6 +57,16 @@
         </g>
         <!-- لامپ -->
         <circle cx="65" cy="46" r="3" fill="#ffdeaa"/>
+        <!-- تیر چراغ کوچه: منبع نوری که سایه‌ها از آن می‌آیند -->
+        <rect x="120" y="8" width="2.4" height="60" fill="#2c3542"/>
+        <path d="M121 12 q-9 -5 -16 1" stroke="#232b37" stroke-width="2.4" fill="none"/>
+        <path d="M101 11 h10 l-2.4 5 h-6 z" fill="#2a323f"/>
+        <circle cx="106" cy="17" r="2.6" fill="#ffd08a"/>
+        <!-- سایه‌ی آدمی که پشت چرخ ایستاده -->
+        <g opacity=".62">
+          <circle cx="86" cy="34" r="5" fill="#0e131b"/>
+          <path d="M78 64 q0-12 8-12 t8 12 z" fill="#0e131b"/>
+        </g>
       </svg>
     </div>
 
@@ -64,7 +74,7 @@
     <div class="ld-meta"><span id="ldStep">شروع</span><b id="ldPct">۰٪</b></div>
     <div class="ld-tip" id="ldTip">—</div>
   </div>
-  <div class="ld-ver">نسخه‌ی ۲٫۸٫۰</div>
+  <div class="ld-ver" id="ldVer">نسخه‌ی —</div>
 </div>
 
 <noscript>
@@ -104,58 +114,125 @@
   <canvas id="stage"></canvas>
 
   <div class="ui">
-    <!-- نوار بالا -->
-    <div class="topbar">
-      <div class="pill money" id="moneyPill">
-        <span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg></span>
+    <!-- ═══ نوار ارز ═══ -->
+    <div class="hudtop">
+      <div class="cash" id="moneyPill">
+        <span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="9.4" cy="15" r="1.5"/><circle cx="15" cy="15" r="1.5"/><path d="M7.4 15h-.9V11h10.2l-.8 4h-1.4M10.9 15h2.6"/><path d="M8.6 11V9.4h6.2V11"/></svg></span>
         <b id="money">۰</b>
       </div>
-      <div class="pill abroo sm" id="abrooPill">
-        <span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/></svg></span>
+      <div class="cur gem" id="gemPill">
+        <span class="ic"><svg viewBox="0 0 24 24"><path d="M8 3h8l4 6.6-8 11.4-8-11.4z"/><path d="M4.6 9.6h14.8"/><path d="M8 3l1.6 6.6L12 21M16 3l-1.6 6.6L12 21"/></svg></span>
+        <b id="gems">۰</b>
+        <button class="plus" data-tab="store" aria-label="فیروزه بیشتر">+</button>
+      </div>
+      <div class="cur abroo" id="abrooPill">
+        <span class="ic"><svg viewBox="0 0 24 24"><path d="M5 3.5h11a2 2 0 0 1 2 2v15H7a2 2 0 0 1-2-2z"/><path d="M5 17.5h13"/><path d="M11 3.5v7l2-1.6 2 1.6v-7"/></svg></span>
         <b id="abroo">۰</b>
       </div>
-      <div class="pill gem sm" id="gemPill">
-        <span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/></svg></span>
-        <b id="gems">۰</b>
-      </div>
-      <button class="iconbtn on" id="sndBtn" aria-label="صدا">
+    </div>
+
+    <!-- ═══ ساعت و روز ═══ -->
+    <div class="hudclock">
+      <span class="ck-time" id="ckTime">۱۹:۰۰</span>
+      <span class="ck-mood" id="ckMood">اوج شب</span>
+      <span class="ck-wx" id="ckWx" title="هوا"><svg viewBox="0 0 24 24"></svg><b>—</b></span>
+      <span class="ck-date" id="ckDate">—</span>
+      <button class="ck-i" id="statusBtn" aria-label="وضعیت">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.6"/></svg>
+      </button>
+      <button class="ck-i" id="sndBtn" aria-label="صدا">
         <svg id="sndIco" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
       </button>
     </div>
 
-    <!-- نوار پرده -->
-    <div class="ribbon">
-      <div class="actbox">
-        <div class="clockrow">
-          <span class="ck-time" id="ckTime">۱۹:۰۰</span>
-          <span class="ck-mood" id="ckMood">اوج شب</span>
-          <span class="ck-wx" id="ckWx" title="هوا"><svg viewBox="0 0 24 24"></svg><b>—</b></span>
-          <span class="ck-date" id="ckDate">—</span>
-        </div>
-        <div class="occbar" id="occBar" hidden>
-          <span class="oc-ic"><svg viewBox="0 0 24 24"></svg></span>
-          <b id="occName">—</b><i id="occNote">—</i><span class="oc-mul" id="occMul">—</span>
-        </div>
-        <div class="r1"><b id="shopName">چرخ پدر</b><span class="num" id="actLbl">پرده‌ی ۱/۱۲</span></div>
-        <div class="track act" id="actTrack"><i id="actProg" style="width:0%"></i></div>
-        <div class="r1 r2"><span>اصالت <b id="integVal">۷۰</b></span><span class="num" id="integMul">×۱</span></div>
-        <div class="track int" id="integTrack"><i id="integProg" style="width:70%"></i></div>
-        <div class="chips2">
-          <span class="c2" id="chipSpace">فضا ۰/۸</span>
-          <span class="c2" id="chipReq">سطح ۰/۶</span>
-        </div>
-      </div>
-      <button class="sidebtn" id="shiftBtn">
-        <svg viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
-        <span id="shiftLabel">بستن</span>
-      </button>
+    <div class="occbar" id="occBar" hidden>
+      <span class="oc-ic"><svg viewBox="0 0 24 24"></svg></span>
+      <b id="occName">—</b><i id="occNote">—</i><span class="oc-mul" id="occMul">—</span>
     </div>
+
+    <!-- ═══ کارت وضعیت ═══ -->
+    <div class="statuscard" id="statusCard" hidden>
+      <div class="st-row"><b id="shopName">چرخ پدر</b><span id="actLbl">پرده‌ی ۱/۱۲</span></div>
+      <div class="track act" id="actTrack"><i id="actProg" style="width:0%"></i></div>
+      <div class="st-row"><span>اصالت <b id="integVal">۷۰</b></span><span id="integMul">×۱</span></div>
+      <div class="track int" id="integTrack"><i id="integProg" style="width:70%"></i></div>
+      <div class="st-chips">
+        <span class="c2" id="chipSpace">فضا ۰/۸</span>
+        <span class="c2" id="chipReq">سطح ۰/۶</span>
+      </div>
+    </div>
+
+    <!-- ═══ ریل چپ: پول و بیرون ═══ -->
+    <nav class="rail left">
+      <button class="tab rbtn" data-tab="store">
+        <svg viewBox="0 0 24 24"><path d="M8 3h8l4 6.6-8 11.4-8-11.4z"/><path d="M4.6 9.6h14.8"/></svg>
+        <em>فروشگاه</em><i class="badge" id="bStore" hidden></i>
+      </button>
+      <button class="tab rbtn" data-tab="menu">
+        <svg viewBox="0 0 24 24"><path d="M5 3v18M5 3c2 0 3 2 3 4S7 11 5 11"/><path d="M13 3v7a3 3 0 0 0 6 0V3M16 10v11"/></svg>
+        <em>منو</em><i class="badge" id="bMenu" hidden></i>
+      </button>
+      <button class="tab rbtn" data-tab="more">
+        <svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/></svg>
+        <em>کوچه</em>
+      </button>
+    </nav>
+
+    <!-- ═══ ریل راست: مدیریت ═══ -->
+    <nav class="rail right">
+      <button class="tab rbtn" data-tab="shop" id="tabShop">
+        <svg viewBox="0 0 24 24"><path d="M3 10h18M4 10l1 10h14l1-10M8 10V6h8v4"/></svg>
+        <em>ایستگاه</em><i class="badge" id="bShop" hidden></i>
+      </button>
+      <button class="tab rbtn" data-tab="crew">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M18 8v6M15 11h6"/></svg>
+        <em>نیرو</em><i class="badge" id="bCrew" hidden></i>
+      </button>
+      <button class="tab rbtn" data-tab="grow">
+        <svg viewBox="0 0 24 24"><path d="M4 20l6-7 4 4 6-9"/><path d="M14 8h6v6"/></svg>
+        <em>رشد</em><i class="badge" id="bGrow" hidden></i>
+      </button>
+      <button class="tab rbtn" data-tab="book">
+        <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M8 8h7M8 12h7"/></svg>
+        <em>دفترچه</em><i class="badge" id="bBook" hidden></i>
+      </button>
+    </nav>
 
     <!-- سفارش ویژه -->
     <div class="goal" id="goalBox" hidden>
       <span class="gi"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 8l7-5 7 5"/><circle cx="12" cy="16" r="4"/></svg></span>
       <div class="gt"><b id="goalText">—</b><div class="track"><i id="goalProg" style="width:0%"></i></div></div>
       <button class="claim" id="goalClaim">جایزه</button>
+    </div>
+
+    <!-- شهر تمام شد -->
+    <button class="nextcity" id="nextCity" hidden>
+      <svg viewBox="0 0 24 24"><path d="M4 20V9l6-4 6 4v11"/><path d="M14 20v-7h6v7"/><path d="M9 20v-4h2v4"/></svg>
+      <span>این شهر تمام شد — برو شهر بعد</span>
+      <b>+<i id="ncGain">۰</i> آبرو</b>
+    </button>
+
+    <!-- پنل بخشِ لمس‌شده -->
+    <div class="secpanel" id="secPanel" hidden>
+      <div class="sp-head">
+        <span class="sp-ic" id="spIco"></span>
+        <b id="spName">—</b>
+        <button class="sp-x" id="spClose" aria-label="بستن">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="sp-stats">
+        <div><span>درآمد</span><b id="spRate">—</b></div>
+        <div><span>کارایی</span><b id="spEff">—</b></div>
+        <div><span>توان</span><b id="spPow">—</b></div>
+      </div>
+      <div class="sp-track"><i id="spBar" style="width:0%"></i><em id="spPct">۰٪</em></div>
+      <div class="sp-main">
+        <div class="sp-lvl"><span id="spLvlNum">۰</span></div>
+        <div class="sp-desc"><b id="spTitle">—</b><i id="spNote">—</i></div>
+        <button class="sp-buy" id="spBuy"><span id="spBuyT">ارتقا</span><b id="spBuyC">—</b></button>
+      </div>
+      <div class="sp-grid" id="spGrid"></div>
     </div>
 
     <!-- ناحیه‌ی لمس صحنه -->
@@ -174,38 +251,19 @@
     <div class="ratebadge" id="rateBadge">هنوز چیزی نمی‌آید</div>
 
     <div class="fabrow">
+      <button class="shiftbtn" id="shiftBtn">
+        <svg viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
+        <span id="shiftLabel">بستن</span>
+      </button>
       <button class="fab" id="serveBtn">
         <span class="ring"></span>
         <span class="in"><b id="fabLabel">سرو</b><span id="fabSub">مشتری</span></span>
       </button>
+      <button class="zoombtn" id="zoomBtn" aria-label="نمای شهر">
+        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        <span>شهر</span>
+      </button>
     </div>
-
-    <!-- تب‌ها -->
-    <nav class="tabs">
-      <button class="tab" data-tab="shop" id="tabShop">
-        <svg viewBox="0 0 24 24"><path d="M3 10h18M4 10l1 10h14l1-10M8 10V6h8v4"/></svg><span>ایستگاه</span>
-        <i class="badge" id="bShop" hidden></i>
-      </button>
-      <button class="tab" data-tab="crew">
-        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M18 8v6M15 11h6"/></svg><span>نیرو</span>
-        <i class="badge" id="bCrew" hidden></i>
-      </button>
-      <button class="tab" data-tab="grow">
-        <svg viewBox="0 0 24 24"><path d="M3 21V10l9-6 9 6v11"/><path d="M9 21v-6h6v6"/></svg><span>رشد</span>
-        <i class="badge" id="bGrow" hidden></i>
-      </button>
-      <button class="tab" data-tab="book">
-        <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M8 8h7M8 12h7"/></svg><span>دفترچه</span>
-        <i class="badge" id="bBook" hidden></i>
-      </button>
-      <button class="tab" data-tab="store">
-        <svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/></svg><span>فروشگاه</span>
-        <i class="badge" id="bStore" hidden></i>
-      </button>
-      <button class="tab" data-tab="more">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg><span>دفتر</span>
-      </button>
-    </nav>
   </div>
 
   <div id="scrim"></div>
@@ -228,7 +286,7 @@
   <div class="ic">
     <h1>آبرو</h1>
     <p class="tag">یک بازی درباره‌ی رشد و آنچه سر راه جا می‌ماند</p>
-    <p>پدرت یک چرخ داشت و یک دفترچه‌ی دستور پخت که به کسی نداد. حالا او نیست و تو مانده‌ای با همان دفترچه و صفر تومان.</p>
+    <p>پدرت یک چرخ داشت و یک دفترچه‌ی دستور پخت که به کسی نداد. حالا او نیست و تو مانده‌ای با همان دفترچه و صفر ایر.</p>
     <div class="qt">هر تصمیم دو چیز را جابه‌جا می‌کند: چقدر سریع بزرگ می‌شوی، و چقدر از خودت باقی می‌ماند.</div>
     <button id="introGo">چرخ را هل بده</button>
   </div>
@@ -299,6 +357,38 @@
 </div>
 
 <!-- ═══ کادو ═══ -->
+<!-- ═══════════ پیش‌نمای کارت ═══════════ -->
+<div class="veil" id="cardVeil" hidden role="dialog" aria-modal="true">
+  <div class="cardcard">
+    <div class="cd-prev"><canvas id="cdCanvas" width="1080" height="1080"></canvas></div>
+    <div class="cd-btns">
+      <button class="cd-send" id="cdSend">فرستادن</button>
+      <button class="cd-save" id="cdSave">ذخیره در گوشی</button>
+      <button class="cd-close" id="cdClose">بستن</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ مینی‌گیم ═══════════ -->
+<div class="veil" id="miVeil" hidden role="dialog" aria-modal="true">
+  <div class="micard">
+    <div class="mi-head">
+      <b id="miTitle">—</b>
+      <span class="mi-sc" id="miScore">۰٪</span>
+      <button class="mi-x" id="miQuit" aria-label="بیرون">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="mi-timewrap"><i id="miTime" style="width:100%"></i></div>
+    <div class="mi-stage" id="miStage"></div>
+    <div class="mi-note" id="miNote">—</div>
+    <div class="mi-done" id="miDone" hidden>
+      <b id="miPay">—</b>
+      <button class="mi-ok" id="miOk">تمام</button>
+    </div>
+  </div>
+</div>
+
 <div class="veil" id="giftVeil" hidden role="dialog" aria-modal="true">
   <div class="giftcard">
     <div class="gift-art">
@@ -346,10 +436,10 @@
 <div class="veil" id="buyVeil" hidden role="dialog" aria-modal="true">
   <div class="modal">
     <h3>فروشگاه هنوز وصل نیست</h3>
-    <p class="sub">این بسته <b id="buyGems">۰</b> الماس دارد و قیمتش <b id="buyPrice">—</b> نوشته شده،
+    <p class="sub">این بسته <b id="buyGems">۰</b> فیروزه دارد و قیمتش <b id="buyPrice">—</b> نوشته شده،
       ولی هیچ درگاه پرداختی به بازی وصل نیست و هیچ پولی از حساب کسی کم نمی‌شود.</p>
     <div class="forecast" style="margin-bottom:14px">
-      <span>راه‌های واقعی گرفتن الماس</span>
+      <span>راه‌های واقعی گرفتن فیروزه</span>
       <span style="text-align:end;font-size:11px;line-height:1.9">تبلیغ · نشان · ارتقای پرده</span>
     </div>
     <button class="solid" id="buyOk" style="width:100%">فهمیدم</button>
@@ -393,17 +483,20 @@
 })();
 </script>
 
-<script src="js/util.js?v=2.8.0"></script>
-<script src="js/billing.js?v=2.8.0"></script>
-<script src="js/audio.js?v=2.8.0"></script>
-<script src="js/data.js?v=2.8.0"></script>
-<script src="js/clock.js?v=2.8.0"></script>
-<script src="js/world.js?v=2.8.0"></script>
-<script src="js/staff.js?v=2.8.0"></script>
-<script src="js/state.js?v=2.8.0"></script>
-<script src="js/scene.js?v=2.8.0"></script>
-<script src="js/loader.js?v=2.8.0"></script>
-<script src="js/ui.js?v=2.8.0"></script>
-<script src="js/game.js?v=2.8.0"></script>
+<script src="js/util.js?v=4.1.0"></script>
+<script src="js/billing.js?v=4.1.0"></script>
+<script src="js/audio.js?v=4.1.0"></script>
+<script src="js/data.js?v=4.1.0"></script>
+<script src="js/clock.js?v=4.1.0"></script>
+<script src="js/world.js?v=4.1.0"></script>
+<script src="js/staff.js?v=4.1.0"></script>
+<script src="js/state.js?v=4.1.0"></script>
+<script src="js/scene.js?v=4.1.0"></script>
+<script src="js/iso.js?v=4.1.0"></script>
+<script src="js/mini.js?v=4.1.0"></script>
+<script src="js/share.js?v=4.1.0"></script>
+<script src="js/loader.js?v=4.1.0"></script>
+<script src="js/ui.js?v=4.1.0"></script>
+<script src="js/game.js?v=4.1.0"></script>
 </body>
 </html>
